@@ -155,16 +155,16 @@ public void setErrorMessage(String errorMessage) {
 
 @Override
 public String toString() {
-    return "MessageLog{" +
-            "id=" + id +
-            ", chatId=" + chatId +
-            ", userId=" + userId +
-            ", username='" + username + '' ' +
-    ", messageType=" + messageType +
-            ", createdAt=" + createdAt +
-            ", responseTimeMs=" + responseTimeMs +
-            ", isGroup=" + isGroup +
-            '}';
+        return "MessageLog{" +
+                "id=" + id +
+                ", chatId=" + chatId +
+                ", userId=" + userId +
+                ", username='" + username + '\'' +
+                ", messageType=" + messageType +
+                ", createdAt=" + createdAt +
+                ", responseTimeMs=" + responseTimeMs +
+                ", isGroup=" + isGroup +
+                '}';
 }
 
 /**

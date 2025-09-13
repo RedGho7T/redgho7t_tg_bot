@@ -2,67 +2,32 @@ package ru.redgho7t.telegrambot.config;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.stereotype.Component;
 
-/**
-* Конфигурационный класс для Telegram AI Bot
-* <p>
-* Загружает настройки из переменных окружения:
-* - TELEGRAM_BOT_TOKEN
-* - TELEGRAM_BOT_USERNAME
-* - GOOGLE_AI_API_KEY
-*/
+@Component
+@ConfigurationProperties(prefix = "telegram.bot")
 public class BotConfig {
+    private static final Logger logger = LoggerFactory.getLogger(BotConfig.class);
 
-private static final Logger logger = LoggerFactory.getLogger(BotConfig.class);
+    private String token;
+    private String username;
+    private String googleApiKey;
 
-// Токен бота от @BotFather
-private final String botToken;
+    // Spring автоматически заполнит поля из application.properties
 
-// Имя пользователя бота (без @)
-private final String botUsername;
+    public String getBotToken() { return token; }
+    public void setToken(String token) { this.token = token; }
 
-// API-ключ Google AI Studio (Gemini)
-private final String googleApiKey;
+    public String getBotUsername() { return username; }
+    public void setUsername(String username) { this.username = username; }
 
-/**
- * Конструктор загружает настройки из переменных окружения
- */
-public BotConfig() {
-    this.botToken = getEnv("TELEGRAM_BOT_TOKEN");
-    this.botUsername = getEnv("TELEGRAM_BOT_USERNAME");
-    this.googleApiKey = getEnv("GOOGLE_AI_API_KEY");
+    public String getGoogleApiKey() { return googleApiKey; }
+    public void setGoogleApiKey(String googleApiKey) { this.googleApiKey = googleApiKey; }
 
-    logger.info("Конфигурация загружена:");
-    logger.debug("BotUsername: {}", botUsername);
-    logger.debug("Using Google AI API Key: {}", googleApiKey != null ? "[SET]" : "[NOT SET]");
-}
-
-private String getEnv(String name) {
-    String value = System.getenv(name);
-    if (value == null || value.trim().isEmpty()) {
-        logger.error("Переменная окружения '{}' не задана или пуста", name);
+    public boolean isValid() {
+        return token != null && !token.isBlank()
+                && username != null && !username.isBlank()
+                && googleApiKey != null && !googleApiKey.isBlank();
     }
-    return value;
-}
-
-/**
- * Проверяет, что все обязательные переменные заданы
- */
-public boolean isValid() {
-    return botToken != null && !botToken.isBlank()
-            && botUsername != null && !botUsername.isBlank()
-            && googleApiKey != null && !googleApiKey.isBlank();
-}
-
-public String getBotToken() {
-    return botToken;
-}
-
-public String getBotUsername() {
-    return botUsername;
-}
-
-public String getGoogleApiKey() {
-    return googleApiKey;
-}
 }
