@@ -8,6 +8,9 @@ WORKDIR /app
 COPY .mvn/ .mvn/
 COPY mvnw pom.xml ./
 
+# Делаем mvnw исполняемым
+RUN chmod +x mvnw
+
 # Загружаем зависимости (этот слой будет кеширован)
 RUN ./mvnw dependency:go-offline -B
 
@@ -52,3 +55,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 
 # Запускаем приложение
 CMD ["sh", "-c", "java $JAVA_OPTS -jar app.jar"]
+
