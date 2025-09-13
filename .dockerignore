@@ -1,0 +1,41 @@
+# Исключаем ненужные файлы из Docker контекста
+
+# Git
+.git
+.gitignore
+
+# Maven
+target/
+!target/*.jar
+*.log
+
+# IDE файлы
+.idea/
+*.iws
+*.iml
+*.ipr
+.vscode/
+*.swp
+*.swo
+
+# OS файлы
+.DS_Store
+Thumbs.db
+
+# Логи
+logs/
+*.log
+
+# Временные файлы
+tmp/
+temp/
+
+# Node.js (если есть)
+node_modules/
+npm-debug.log*
+
+# Другие файлы
+README.md
+.env
+.env.local
+.env.production

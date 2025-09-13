@@ -1,0 +1,94 @@
+2025-09-13 14:48:28 [main] INFO  ru.redgho7t.telegrambot.Main - Starting Main using Java 24.0.1 with PID 12844 (C:\Users\redgho7t\IdeaProjects\telegram_bot\target\classes started by redgho7t in C:\Users\redgho7t\IdeaProjects\telegram_bot)
+2025-09-13 14:48:28 [main] INFO  ru.redgho7t.telegrambot.Main - No active profile set, falling back to 1 default profile: "default"
+2025-09-13 14:48:28 [main] WARN  o.s.b.w.r.c.AnnotationConfigReactiveWebServerApplicationContext - Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name 'telegramAiBot' defined in file [C:\Users\redgho7t\IdeaProjects\telegram_bot\target\classes\ru\redgho7t\telegrambot\TelegramAiBot.class]: Unsatisfied dependency expressed through constructor parameter 0: No qualifying bean of type 'ru.redgho7t.telegrambot.service.GoogleAiService' available: expected at least 1 bean which qualifies as autowire candidate. Dependency annotations: {}
+2025-09-13 14:48:28 [main] INFO  o.s.b.a.l.ConditionEvaluationReportLogger - 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2025-09-13 14:48:28 [main] ERROR o.s.b.d.LoggingFailureAnalysisReporter - 
+
+***************************
+APPLICATION FAILED TO START
+***************************
+
+Description:
+
+Parameter 0 of constructor in ru.redgho7t.telegrambot.TelegramAiBot required a bean of type 'ru.redgho7t.telegrambot.service.GoogleAiService' that could not be found.
+
+
+Action:
+
+Consider defining a bean of type 'ru.redgho7t.telegrambot.service.GoogleAiService' in your configuration.
+
+2025-09-13 14:49:09 [main] INFO  ru.redgho7t.telegrambot.Main - Starting Main using Java 24.0.1 with PID 26912 (C:\Users\redgho7t\IdeaProjects\telegram_bot\target\classes started by redgho7t in C:\Users\redgho7t\IdeaProjects\telegram_bot)
+2025-09-13 14:49:09 [main] INFO  ru.redgho7t.telegrambot.Main - No active profile set, falling back to 1 default profile: "default"
+2025-09-13 14:49:10 [main] WARN  o.s.b.w.r.c.AnnotationConfigReactiveWebServerApplicationContext - Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name 'telegramAiBot' defined in file [C:\Users\redgho7t\IdeaProjects\telegram_bot\target\classes\ru\redgho7t\telegrambot\TelegramAiBot.class]: Unsatisfied dependency expressed through constructor parameter 0: No qualifying bean of type 'ru.redgho7t.telegrambot.service.GoogleAiService' available: expected at least 1 bean which qualifies as autowire candidate. Dependency annotations: {}
+2025-09-13 14:49:10 [main] INFO  o.s.b.a.l.ConditionEvaluationReportLogger - 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2025-09-13 14:49:10 [main] ERROR o.s.b.d.LoggingFailureAnalysisReporter - 
+
+***************************
+APPLICATION FAILED TO START
+***************************
+
+Description:
+
+Parameter 0 of constructor in ru.redgho7t.telegrambot.TelegramAiBot required a bean of type 'ru.redgho7t.telegrambot.service.GoogleAiService' that could not be found.
+
+
+Action:
+
+Consider defining a bean of type 'ru.redgho7t.telegrambot.service.GoogleAiService' in your configuration.
+
+2025-09-13 14:50:02 [main] INFO  ru.redgho7t.telegrambot.Main - Starting Main using Java 24.0.1 with PID 25836 (C:\Users\redgho7t\IdeaProjects\telegram_bot\target\classes started by redgho7t in C:\Users\redgho7t\IdeaProjects\telegram_bot)
+2025-09-13 14:50:02 [main] INFO  ru.redgho7t.telegrambot.Main - No active profile set, falling back to 1 default profile: "default"
+2025-09-13 14:50:02 [main] WARN  o.s.b.w.r.c.AnnotationConfigReactiveWebServerApplicationContext - Exception encountered during context initialization - cancelling refresh attempt: org.springframework.beans.factory.UnsatisfiedDependencyException: Error creating bean with name 'googleAiService' defined in file [C:\Users\redgho7t\IdeaProjects\telegram_bot\target\classes\ru\redgho7t\telegrambot\service\GoogleAiService.class]: Unsatisfied dependency expressed through constructor parameter 0: No qualifying bean of type 'java.lang.String' available: expected at least 1 bean which qualifies as autowire candidate. Dependency annotations: {}
+2025-09-13 14:50:02 [main] INFO  o.s.b.a.l.ConditionEvaluationReportLogger - 
+
+Error starting ApplicationContext. To display the condition evaluation report re-run your application with 'debug' enabled.
+2025-09-13 14:50:02 [main] ERROR o.s.b.d.LoggingFailureAnalysisReporter - 
+
+***************************
+APPLICATION FAILED TO START
+***************************
+
+Description:
+
+Parameter 0 of constructor in ru.redgho7t.telegrambot.service.GoogleAiService required a bean of type 'java.lang.String' that could not be found.
+
+
+Action:
+
+Consider defining a bean of type 'java.lang.String' in your configuration.
+
+2025-09-13 14:53:14 [main] INFO  ru.redgho7t.telegrambot.Main - Starting Main using Java 24.0.1 with PID 27200 (C:\Users\redgho7t\IdeaProjects\telegram_bot\target\classes started by redgho7t in C:\Users\redgho7t\IdeaProjects\telegram_bot)
+2025-09-13 14:53:14 [main] INFO  ru.redgho7t.telegrambot.Main - No active profile set, falling back to 1 default profile: "default"
+2025-09-13 14:53:15 [main] INFO  r.redgho7t.telegrambot.TelegramAiBot - TelegramAiBot создан с GoogleAiService
+2025-09-13 14:53:15 [main] INFO  r.r.t.service.MessageProcessor - MessageProcessor инициализирован с GoogleAiService и поддержкой длинных сообщений
+2025-09-13 14:53:15 [main] INFO  r.redgho7t.telegrambot.TelegramAiBot - TelegramAiBot полностью инициализирован. Username: Redgho7t_AI_bot
+2025-09-13 14:53:15 [main] INFO  o.s.b.w.e.netty.NettyWebServer - Netty started on port 8080
+2025-09-13 14:53:15 [main] INFO  ru.redgho7t.telegrambot.Main - Started Main in 1.751 seconds (process running for 2.051)
+2025-09-13 14:53:15 [main] INFO  ru.redgho7t.telegrambot.Main - === Бот успешно запущен ===
+2025-09-13 14:54:49 [main] INFO  ru.redgho7t.telegrambot.Main - Starting Main using Java 24.0.1 with PID 23236 (C:\Users\redgho7t\IdeaProjects\telegram_bot\target\classes started by redgho7t in C:\Users\redgho7t\IdeaProjects\telegram_bot)
+2025-09-13 14:54:49 [main] INFO  ru.redgho7t.telegrambot.Main - No active profile set, falling back to 1 default profile: "default"
+2025-09-13 14:54:50 [main] INFO  r.redgho7t.telegrambot.TelegramAiBot - TelegramAiBot создан с GoogleAiService
+2025-09-13 14:54:50 [main] INFO  r.r.t.service.MessageProcessor - MessageProcessor инициализирован с GoogleAiService и поддержкой длинных сообщений
+2025-09-13 14:54:50 [main] INFO  r.redgho7t.telegrambot.TelegramAiBot - TelegramAiBot полностью инициализирован. Username: Redgho7t_AI_bot
+2025-09-13 14:54:51 [main] INFO  o.s.b.w.e.netty.NettyWebServer - Netty started on port 8080
+2025-09-13 14:54:51 [main] INFO  ru.redgho7t.telegrambot.Main - Started Main in 1.71 seconds (process running for 2.037)
+2025-09-13 14:54:51 [main] INFO  ru.redgho7t.telegrambot.Main - === Бот успешно запущен ===
+2025-09-13 14:58:21 [main] INFO  ru.redgho7t.telegrambot.Main - Starting Main using Java 24.0.1 with PID 17896 (C:\Users\redgho7t\IdeaProjects\telegram_bot\target\classes started by redgho7t in C:\Users\redgho7t\IdeaProjects\telegram_bot)
+2025-09-13 14:58:21 [main] INFO  ru.redgho7t.telegrambot.Main - No active profile set, falling back to 1 default profile: "default"
+2025-09-13 14:58:22 [main] INFO  r.redgho7t.telegrambot.TelegramAiBot - TelegramAiBot создан с GoogleAiService
+2025-09-13 14:58:22 [main] INFO  r.r.t.service.MessageProcessor - MessageProcessor инициализирован с GoogleAiService и поддержкой длинных сообщений
+2025-09-13 14:58:22 [main] INFO  r.redgho7t.telegrambot.TelegramAiBot - TelegramAiBot полностью инициализирован. Username: Redgho7t_AI_bot
+2025-09-13 14:58:22 [main] INFO  o.s.b.w.e.netty.NettyWebServer - Netty started on port 8080
+2025-09-13 14:58:22 [main] INFO  ru.redgho7t.telegrambot.Main - Started Main in 2.211 seconds (process running for 2.628)
+2025-09-13 14:58:22 [main] INFO  ru.redgho7t.telegrambot.Main - === Бот успешно запущен ===
+2025-09-13 15:05:19 [main] INFO  ru.redgho7t.telegrambot.Main - Starting Main using Java 24.0.1 with PID 6068 (C:\Users\redgho7t\IdeaProjects\telegram_bot\target\classes started by redgho7t in C:\Users\redgho7t\IdeaProjects\telegram_bot)
+2025-09-13 15:05:19 [main] INFO  ru.redgho7t.telegrambot.Main - No active profile set, falling back to 1 default profile: "default"
+2025-09-13 15:05:20 [main] INFO  r.redgho7t.telegrambot.TelegramAiBot - TelegramAiBot создан с GoogleAiService
+2025-09-13 15:05:20 [main] INFO  r.r.t.service.MessageProcessor - MessageProcessor инициализирован с GoogleAiService и поддержкой длинных сообщений
+2025-09-13 15:05:20 [main] INFO  r.redgho7t.telegrambot.TelegramAiBot - TelegramAiBot полностью инициализирован. Username: Redgho7t_AI_bot
+2025-09-13 15:05:20 [main] INFO  ru.redgho7t.telegrambot.Main - Started Main in 1.284 seconds (process running for 1.622)
+2025-09-13 15:05:20 [main] INFO  ru.redgho7t.telegrambot.Main - === Бот успешно запущен ===
