@@ -6,10 +6,9 @@ import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import ru.redgho7t.telegrambot.utils.ResponseTemplates;
+
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Arrays;
-import java.util.List;
 
 /**
  * Сервис для обработки сообщений от пользователей.
@@ -22,37 +21,20 @@ public class MessageProcessor {
     private final ResponseTemplates responseTemplates;
     private final Map<String, String> keywordTemplates;
     private final GoogleAiService googleAiService;
-
-    // Ключевые слова для разных реакций (в нижнем регистре)
-    private static final List<String> BOT_TRIGGER_WORDS = Arrays.asList(
-            "бот", "ботяра", "bot", "botyara", "botik", "chlenix", "bobi", "botniy"
-    );
-
-    private static final List<String> POPI_TRIGGER_WORDS = Arrays.asList(
-            "попи", "popi", "пупстерс", "попикс", "попа"
-    );
-
-    private static final List<String> JAVA_TRIGGER_WORDS = Arrays.asList(
-            "java", "jabi"
-    );
-
-    private static final List<String> GO_TRIGGER_WORDS = Arrays.asList(
-            "go", "го", "гоу"
-    );
-    private static final List<String> JABI_TRIGGER_WORDS = Arrays.asList(
-            "jabi", "JABI","жаби","jabbi","JABA","ЖАБИ"
-    );
+    private final JokeService jokeService; // Добавляем сервис анекдотов
 
     /**
      * Конструктор процессора сообщений.
      *
-     * @param googleAiService сервис для работы с Google Gemini AI
+     * @param googleAiService сервис для работы с Google Gemini API
+     * @param jokeService сервис для получения анекдотов
      */
-    public MessageProcessor(GoogleAiService googleAiService) {
+    public MessageProcessor(GoogleAiService googleAiService, JokeService jokeService) {
         this.googleAiService = googleAiService;
+        this.jokeService = jokeService;
         this.responseTemplates = new ResponseTemplates();
         this.keywordTemplates = initializeKeywordTemplates();
-        logger.info("MessageProcessor инициализирован с GoogleAiService");
+        logger.info("MessageProcessor инициализирован с GoogleAiService и JokeService");
     }
 
     private Map<String, String> initializeKeywordTemplates() {
@@ -73,6 +55,14 @@ public class MessageProcessor {
         templates.put("compare", "Compare ");
         templates.put("разница", "В чем разница между ");
         templates.put("difference", "What's the difference between ");
+
+        // Добавляем ключевые слова для анекдотов
+        templates.put("анекдот", "🤣 Анекдот для поднятия настроения:");
+        templates.put("шутка", "😄 Вот забавная шутка:");
+        templates.put("расскажи анекдот", "🎭 Держи анекдот:");
+        templates.put("joke", "😂 Here's a joke for you:");
+        templates.put("tell me a joke", "🤣 Here's a funny one:");
+
         return templates;
     }
 
@@ -86,6 +76,7 @@ public class MessageProcessor {
             } else if (update.hasCallbackQuery()) {
                 return processCallbackQuery(update.getCallbackQuery());
             }
+
             return new ProcessingResult("", false);
         } catch (Exception e) {
             logger.error("Ошибка при обработке обновления: {}", e.getMessage(), e);
@@ -105,82 +96,32 @@ public class MessageProcessor {
 
         logger.info("Получено сообщение от {}: {}", userName, messageText);
 
-        // Проверяем команды первыми
         if (messageText.startsWith("/")) {
             return processCommand(messageText, chatId, isGroup);
         }
 
-        // Проверяем специальные ключевые слова
-        ProcessingResult specialResponse = checkSpecialKeywords(messageText);
-        if (specialResponse != null) {
-            return specialResponse;
-        }
-
-        // Для групп проверяем, обращаются ли к боту
         if (isGroup && !isMessageForBot(message)) {
             return new ProcessingResult("", false);
+        }
+
+        // Проверяем на ключевые слова анекдотов ПЕРЕД обработкой AI
+        if (isJokeRequest(messageText)) {
+            return processJokeRequest(messageText);
         }
 
         return processUserMessage(messageText, userName);
     }
 
-    /**
-     * Проверяет специальные ключевые слова и возвращает соответствующий ответ
-     */
-    private ProcessingResult checkSpecialKeywords(String messageText) {
-        // Разбиваем на слова: все подряд non-letters как разделители
-        String[] tokens = messageText
-                .toLowerCase()
-                .split("[^\\p{L}]+");  // \p{L} — любая буква Unicode
-
-        for (String token : tokens) {
-            // обращение к боту
-            if (BOT_TRIGGER_WORDS.contains(token)) {
-                return new ProcessingResult(responseTemplates.getBotResponseMessage(), true, false);
-            }
-            // попи
-            if (POPI_TRIGGER_WORDS.contains(token)) {
-                return new ProcessingResult(responseTemplates.getPopiMessage(), true, false);
-            }
-            for (String trigger : JABI_TRIGGER_WORDS) {
-                if (Arrays.asList(tokens).contains(trigger)) {
-                    logger.info("Обнаружено ключевое слово JABI: {}", trigger);
-                    return new ProcessingResult(responseTemplates.getJabiMessage(), true, false);
-                }
-            }
-            // Java
-            if (JAVA_TRIGGER_WORDS.contains(token)) {
-                return new ProcessingResult(responseTemplates.getJavaMessage(), true, false);
-            }
-            // Go
-            if (GO_TRIGGER_WORDS.contains(token)) {
-                return new ProcessingResult(responseTemplates.getGoMessage(), true, false);
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Проверяет, содержит ли текст слово как отдельное слово (не часть другого слова)
-     */
-    private boolean containsWord(String text, String word) {
-        // Используем регулярное выражение для поиска целого слова
-        String pattern = "\\b" + word.toLowerCase() + "\\b";
-        return text.matches(".*" + pattern + ".*");
-    }
-
     private ProcessingResult processCommand(String command, Long chatId, boolean isGroup) {
-        // Убираем аргументы
-        String cmdPart = command.toLowerCase().split("\\s+")[0];
-        // Обрезаем суффикс вида @botusername
-        String cmd = cmdPart.contains("@") ? cmdPart.substring(0, cmdPart.indexOf("@")) : cmdPart;
+        String cmd = command.toLowerCase().split("\\s+")[0];
         return switch (cmd) {
-            case "/start"  -> new ProcessingResult(responseTemplates.getMainMenuMessage(), true, false);
-            case "/help"   -> new ProcessingResult(responseTemplates.getHelpMessage(), true, false);
-            case "/about"  -> new ProcessingResult(responseTemplates.getAboutMessage(), true, false);
+            case "/start" -> new ProcessingResult(responseTemplates.getMainMenuMessage(), true, false);
+            case "/help" -> new ProcessingResult(responseTemplates.getHelpMessage(), true, false);
+            case "/about" -> new ProcessingResult(responseTemplates.getAboutMessage(), true, false);
             case "/status" -> processStatusCommand();
             case "/models" -> new ProcessingResult(responseTemplates.getModelsMessage(), true, false);
-            default        -> {
+            case "/joke", "/анекдот" -> processJokeCommand(); // Добавляем команды для анекдотов
+            default -> {
                 if (isGroup) {
                     yield new ProcessingResult("", false);
                 } else {
@@ -192,11 +133,89 @@ public class MessageProcessor {
         };
     }
 
+    /**
+     * Обрабатывает команду получения анекдота
+     */
+    private ProcessingResult processJokeCommand() {
+        try {
+            String joke = jokeService.getRandomJoke();
+            String response = "🎭 **Анекдот дня:**\n\n" + joke + "\n\n😄 Надеюсь, поднял настроение!";
+            logger.info("Отправлен анекдот по команде");
+            return new ProcessingResult(response, true, false);
+        } catch (Exception e) {
+            logger.error("Ошибка при получении анекдота: {}", e.getMessage(), e);
+            return new ProcessingResult("❌ Извините, не удалось получить анекдот. Попробуйте позже.", true, false);
+        }
+    }
+
+    /**
+     * Проверяет, является ли сообщение запросом на анекдот
+     */
+    private boolean isJokeRequest(String messageText) {
+        String lowerText = messageText.toLowerCase().trim();
+
+        // Точные совпадения
+        if (lowerText.equals("анекдот") || lowerText.equals("шутка") ||
+                lowerText.equals("joke") || lowerText.equals("анекдотик")) {
+            return true;
+        }
+
+        // Фразы с запросом анекдота
+        String[] jokePatterns = {
+                "расскажи анекдот", "расскажи шутку", "давай анекдот",
+                "хочу анекдот", "дай анекдот", "покажи анекдот",
+                "tell me a joke", "tell a joke", "give me a joke",
+                "анекдот плз", "анекдот пожалуйста", "шутку пожалуйста"
+        };
+
+        for (String pattern : jokePatterns) {
+            if (lowerText.contains(pattern)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Обрабатывает запрос на анекдот
+     */
+    private ProcessingResult processJokeRequest(String messageText) {
+        try {
+            String joke = jokeService.getRandomJoke();
+            String template = getJokeTemplate(messageText.toLowerCase());
+            String response = template + "\n\n" + joke + "\n\n😊 Хотите ещё? Просто напишите \"анекдот\"!";
+
+            logger.info("Отправлен анекдот по ключевому слову");
+            return new ProcessingResult(response, true, false);
+        } catch (Exception e) {
+            logger.error("Ошибка при получении анекдота по ключевому слову: {}", e.getMessage(), e);
+            return new ProcessingResult("❌ Извините, не удалось получить анекдот. Попробуйте позже.", true, false);
+        }
+    }
+
+    /**
+     * Получает подходящий шаблон для анекдота в зависимости от запроса
+     */
+    private String getJokeTemplate(String messageText) {
+        if (messageText.contains("joke")) {
+            return "😂 Here's a joke for you:";
+        } else if (messageText.contains("шутк")) {
+            return "😄 Вот забавная шутка:";
+        } else {
+            return "🎭 Держи анекдот:";
+        }
+    }
+
     private ProcessingResult processStatusCommand() {
         boolean isAvailable = googleAiService.isApiAvailable();
+        boolean jokeServiceAvailable = jokeService.isServiceAvailable();
         String status = isAvailable ? "✅ Онлайн" : "❌ Недоступен";
+        String jokeStatus = jokeServiceAvailable ? "✅ Онлайн" : "❌ Недоступен";
+
         String message = String.format(
-                "🤖 **Статус бота:**\n\nAI API: %s\nВремя работы: активен\nВерсия: 1.0.0", status
+                "🤖 **Статус бота:**\n\nAI API: %s\nСервис анекдотов: %s\nВремя работы: активен\nВерсия: 1.0.0",
+                status, jokeStatus
         );
         return new ProcessingResult(message, true, false);
     }
@@ -230,15 +249,15 @@ public class MessageProcessor {
     private ProcessingResult processCallbackQuery(CallbackQuery callbackQuery) {
         String data = callbackQuery.getData();
         logger.info("Получен callback: {}", data);
-
         return switch (data) {
-            case "cmd_about"    -> new ProcessingResult(responseTemplates.getAboutMessage(), true, false);
-            case "cmd_help"     -> new ProcessingResult(responseTemplates.getHelpMessage(), true, false);
-            case "cmd_status"   -> processStatusCommand();
-            case "cmd_models"   -> new ProcessingResult(responseTemplates.getModelsMessage(), true, false);
+            case "cmd_about" -> new ProcessingResult(responseTemplates.getAboutMessage(), true, false);
+            case "cmd_help" -> new ProcessingResult(responseTemplates.getHelpMessage(), true, false);
+            case "cmd_status" -> processStatusCommand();
+            case "cmd_models" -> new ProcessingResult(responseTemplates.getModelsMessage(), true, false);
             case "info_creator" -> new ProcessingResult(responseTemplates.getCreatorInfoMessage(), true, true);
-            case "back_main"    -> new ProcessingResult(responseTemplates.getBackToMainMessage(), true, false);
-            default             -> new ProcessingResult("❓ Неизвестная команда", true, false);
+            case "back_main" -> new ProcessingResult(responseTemplates.getBackToMainMessage(), true, false);
+            case "cmd_joke" -> processJokeCommand(); // Добавляем callback для анекдотов
+            default -> new ProcessingResult("❓ Неизвестная команда", true, false);
         };
     }
 
@@ -247,17 +266,19 @@ public class MessageProcessor {
         if (text != null && text.contains("@")) {
             return true;
         }
+
         var reply = message.getReplyToMessage();
         return reply != null && reply.getFrom().getIsBot();
     }
 
     private String getUserName(Message message) {
         var from = message.getFrom();
-        String first = from.getFirstName()  != null ? from.getFirstName()  : "";
-        String last  = from.getLastName()   != null ? " " + from.getLastName() : "";
+        String first = from.getFirstName() != null ? from.getFirstName() : "";
+        String last = from.getLastName() != null ? " " + from.getLastName() : "";
         if ((first + last).isBlank() && from.getUserName() != null) {
             return "@" + from.getUserName();
         }
+
         return (first + last).isBlank() ? "Unknown User" : first + last;
     }
 

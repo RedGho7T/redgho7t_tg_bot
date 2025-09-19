@@ -14,6 +14,7 @@ import ru.redgho7t.telegrambot.config.BotConfig;
 import ru.redgho7t.telegrambot.entity.MessageLog.MessageType;
 import ru.redgho7t.telegrambot.service.DatabaseService;
 import ru.redgho7t.telegrambot.service.GoogleAiService;
+import ru.redgho7t.telegrambot.service.JokeService;
 import ru.redgho7t.telegrambot.service.MessageProcessor;
 import ru.redgho7t.telegrambot.utils.KeyboardFactory;
 import ru.redgho7t.telegrambot.utils.MessageSplitter;
@@ -21,13 +22,14 @@ import ru.redgho7t.telegrambot.utils.MessageSplitter;
 import java.util.List;
 
 /**
- * Основной класс Telegram AI Bot с поддержкой базы данных
+ * Основной класс Telegram AI Bot с поддержкой базы данных и анекдотов
  *
  * Новые возможности:
  * - Автоматическое логирование всех сообщений в БД
  * - Сохранение времени ответа
  * - Логирование ошибок
  * - Статистика использования
+ * - Функция анекдотов по ключевому слову
  */
 @Component
 public class TelegramAiBot extends TelegramLongPollingBot {
@@ -40,7 +42,7 @@ public class TelegramAiBot extends TelegramLongPollingBot {
     private final DatabaseService databaseService;
 
     @Autowired
-    public TelegramAiBot(BotConfig config, DatabaseService databaseService) {
+    public TelegramAiBot(BotConfig config, DatabaseService databaseService, JokeService jokeService) {
         this.config = config;
         this.databaseService = databaseService;
 
@@ -50,10 +52,10 @@ public class TelegramAiBot extends TelegramLongPollingBot {
         // Инициализируем сервис для Google Gemini API
         GoogleAiService googleAiService = new GoogleAiService(googleKey);
 
-        // Передаём сервис в MessageProcessor
-        this.messageProcessor = new MessageProcessor(googleAiService);
+        // Передаём сервисы в MessageProcessor
+        this.messageProcessor = new MessageProcessor(googleAiService, jokeService);
 
-        logger.info("🤖 TelegramAiBot инициализирован для @{} с поддержкой БД", config.getBotUsername());
+        logger.info("🤖 TelegramAiBot инициализирован для @{} с поддержкой БД и анекдотов", config.getBotUsername());
     }
 
     @Override
@@ -70,7 +72,6 @@ public class TelegramAiBot extends TelegramLongPollingBot {
     public void onUpdateReceived(Update update) {
         // Засекаем время начала обработки
         long startTime = System.currentTimeMillis();
-
         try {
             // Обрабатываем callback запросы (нажатия на кнопки)
             if (update.hasCallbackQuery()) {
@@ -85,7 +86,6 @@ public class TelegramAiBot extends TelegramLongPollingBot {
 
         } catch (Exception e) {
             logger.error("❌ Ошибка при обработке обновления: {}", e.getMessage(), e);
-
             try {
                 Long chatId = getChatId(update);
                 if (chatId != null) {
@@ -117,7 +117,7 @@ public class TelegramAiBot extends TelegramLongPollingBot {
             answer.setCallbackQueryId(callbackQuery.getId());
             execute(answer);
         } catch (TelegramApiException e) {
-            logger.warn("⚠️  Не удалось ответить на callback: {}", e.getMessage());
+            logger.warn("⚠️ Не удалось ответить на callback: {}", e.getMessage());
         }
 
         // Обрабатываем callback через MessageProcessor
@@ -159,6 +159,7 @@ public class TelegramAiBot extends TelegramLongPollingBot {
                 messageText.length() > 50 ? messageText.substring(0, 50) + "..." : messageText);
 
         var result = messageProcessor.processUpdate(update);
+
         if (result.shouldReply() && !result.getResponse().trim().isEmpty()) {
             InlineKeyboardMarkup keyboard = null;
 
@@ -191,13 +192,16 @@ public class TelegramAiBot extends TelegramLongPollingBot {
 
     /**
      * Проверяет, содержит ли сообщение специальные ключевые слова
+     * Добавляем проверку на анекдоты
      */
     private boolean containsSpecialKeyword(String messageText) {
         String lowerText = messageText.toLowerCase();
         return lowerText.contains("бот") || lowerText.contains("ботяра") ||
                 lowerText.contains("попи") || lowerText.contains("java") ||
                 lowerText.contains("жаби") || lowerText.contains("jabi") ||
-                lowerText.contains("го") || lowerText.contains("go");
+                lowerText.contains("го") || lowerText.contains("go") ||
+                lowerText.contains("анекдот") || lowerText.contains("шутка") ||
+                lowerText.contains("joke");
     }
 
     /**
@@ -240,6 +244,7 @@ public class TelegramAiBot extends TelegramLongPollingBot {
             String part = messageParts.get(i);
             // Клавиатуру прикрепляем только к последнему сообщению
             InlineKeyboardMarkup currentKeyboard = (i == messageParts.size() - 1) ? keyboard : null;
+
             sendTextMessage(chatId, part, currentKeyboard);
 
             // Добавляем задержку между сообщениями (кроме последнего)
@@ -248,7 +253,7 @@ public class TelegramAiBot extends TelegramLongPollingBot {
                     Thread.sleep(MESSAGE_DELAY);
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
-                    logger.warn("⚠️  Прервана отправка сообщений");
+                    logger.warn("⚠️ Прервана отправка сообщений");
                     break;
                 }
             }
@@ -289,7 +294,6 @@ public class TelegramAiBot extends TelegramLongPollingBot {
 
                     execute(plainMessage);
                     logger.debug("✅ Сообщение отправлено без форматирования");
-
                 } catch (TelegramApiException retry) {
                     logger.error("❌ Повторная ошибка при отправке сообщения: {}", retry.getMessage());
                 }
@@ -313,6 +317,7 @@ public class TelegramAiBot extends TelegramLongPollingBot {
         } else if (update.hasCallbackQuery()) {
             return update.getCallbackQuery().getMessage().getChatId();
         }
+
         return null;
     }
 
