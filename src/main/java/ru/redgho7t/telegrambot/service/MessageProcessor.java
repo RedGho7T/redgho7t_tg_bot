@@ -9,10 +9,13 @@ import ru.redgho7t.telegrambot.utils.ResponseTemplates;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Arrays;
+import java.util.List;
 
 /**
  * Сервис для обработки сообщений от пользователей.
  * Заменён PerplexityService на GoogleAiService для взаимодействия с Gemini API.
+ * Добавлена поддержка анекдотов через JokeService.
  */
 public class MessageProcessor {
 
@@ -21,7 +24,29 @@ public class MessageProcessor {
     private final ResponseTemplates responseTemplates;
     private final Map<String, String> keywordTemplates;
     private final GoogleAiService googleAiService;
-    private final JokeService jokeService; // Добавляем сервис анекдотов
+    private final JokeService jokeService; // Сервис анекдотов
+
+    // Ключевые слова для разных реакций (в нижнем регистре)
+    private static final List<String> BOT_TRIGGER_WORDS = Arrays.asList(
+            "бот", "ботяра", "bot", "botyara", "попи", "popi",
+            "java", "жаби", "jabi", "го", "go", "айди", "ai"
+    );
+
+    // Специальные ключевые слова и их ответы
+    private static final Map<String, String> SPECIAL_RESPONSES = new HashMap<>();
+    static {
+        SPECIAL_RESPONSES.put("попи", "🐸 Попи жив и здоров!");
+        SPECIAL_RESPONSES.put("popi", "🐸 Popi is alive and well!");
+        SPECIAL_RESPONSES.put("java", "☕ Java - лучший язык программирования!");
+        SPECIAL_RESPONSES.put("жаби", "☕ Жаба рулит!");
+        SPECIAL_RESPONSES.put("jabi", "☕ Java rocks!");
+        SPECIAL_RESPONSES.put("го", "🚀 Поехали!");
+        SPECIAL_RESPONSES.put("go", "🚀 Let's go!");
+        SPECIAL_RESPONSES.put("айди", "🤖 AI Bot к вашим услугам!");
+        SPECIAL_RESPONSES.put("ai", "🤖 AI Bot at your service!");
+        SPECIAL_RESPONSES.put("ботяра", "🤖 Ботяра на связи!");
+        SPECIAL_RESPONSES.put("botyara", "🤖 Botyara is online!");
+    }
 
     /**
      * Конструктор процессора сообщений.
@@ -56,7 +81,7 @@ public class MessageProcessor {
         templates.put("разница", "В чем разница между ");
         templates.put("difference", "What's the difference between ");
 
-        // Добавляем ключевые слова для анекдотов
+        // Шаблоны для анекдотов
         templates.put("анекдот", "🤣 Анекдот для поднятия настроения:");
         templates.put("шутка", "😄 Вот забавная шутка:");
         templates.put("расскажи анекдот", "🎭 Держи анекдот:");
@@ -96,56 +121,50 @@ public class MessageProcessor {
 
         logger.info("Получено сообщение от {}: {}", userName, messageText);
 
+        // 1. Проверяем команды первыми (работают везде)
         if (messageText.startsWith("/")) {
             return processCommand(messageText, chatId, isGroup);
         }
 
-        if (isGroup && !isMessageForBot(message)) {
-            return new ProcessingResult("", false);
+        // 2. Проверяем специальные ключевые слова (работают везде)
+        ProcessingResult specialResponse = checkSpecialKeywords(messageText);
+        if (specialResponse != null) {
+            return specialResponse;
         }
 
-        // Проверяем на ключевые слова анекдотов ПЕРЕД обработкой AI
+        // 3. Проверяем запросы на анекдоты (работают везде)
         if (isJokeRequest(messageText)) {
             return processJokeRequest(messageText);
+        }
+
+        // 4. ТОЛЬКО для AI-запросов проверяем, обращаются ли к боту в группах
+        if (isGroup && !isMessageForBot(message)) {
+            return new ProcessingResult("", false);
         }
 
         return processUserMessage(messageText, userName);
     }
 
-    private ProcessingResult processCommand(String command, Long chatId, boolean isGroup) {
-        String cmd = command.toLowerCase().split("\\s+")[0];
-        return switch (cmd) {
-            case "/start" -> new ProcessingResult(responseTemplates.getMainMenuMessage(), true, false);
-            case "/help" -> new ProcessingResult(responseTemplates.getHelpMessage(), true, false);
-            case "/about" -> new ProcessingResult(responseTemplates.getAboutMessage(), true, false);
-            case "/status" -> processStatusCommand();
-            case "/models" -> new ProcessingResult(responseTemplates.getModelsMessage(), true, false);
-            case "/joke", "/анекдот" -> processJokeCommand(); // Добавляем команды для анекдотов
-            default -> {
-                if (isGroup) {
-                    yield new ProcessingResult("", false);
-                } else {
-                    yield new ProcessingResult(
-                            "❓ Неизвестная команда. Используйте /help для просмотра доступных команд.", true, false
-                    );
-                }
-            }
-        };
-    }
-
     /**
-     * Обрабатывает команду получения анекдота
+     * Проверяет специальные ключевые слова и возвращает соответствующий ответ
      */
-    private ProcessingResult processJokeCommand() {
-        try {
-            String joke = jokeService.getRandomJoke();
-            String response = "🎭 **Анекдот дня:**\n\n" + joke + "\n\n😄 Надеюсь, поднял настроение!";
-            logger.info("Отправлен анекдот по команде");
-            return new ProcessingResult(response, true, false);
-        } catch (Exception e) {
-            logger.error("Ошибка при получении анекдота: {}", e.getMessage(), e);
-            return new ProcessingResult("❌ Извините, не удалось получить анекдот. Попробуйте позже.", true, false);
+    private ProcessingResult checkSpecialKeywords(String messageText) {
+        String lowerText = messageText.toLowerCase();
+
+        for (String keyword : BOT_TRIGGER_WORDS) {
+            if (lowerText.contains(keyword)) {
+                String response = SPECIAL_RESPONSES.get(keyword);
+                if (response != null) {
+                    logger.info("Найдено специальное ключевое слово: {}", keyword);
+                    return new ProcessingResult(response, true, false);
+                }
+
+                // Если нет специального ответа, возвращаем общий ответ
+                return new ProcessingResult("🤖 " + keyword + " - я тебя слышу!", true, false);
+            }
         }
+
+        return null; // Ключевые слова не найдены
     }
 
     /**
@@ -207,6 +226,42 @@ public class MessageProcessor {
         }
     }
 
+    private ProcessingResult processCommand(String command, Long chatId, boolean isGroup) {
+        String cmd = command.toLowerCase().split("\\s+")[0];
+        return switch (cmd) {
+            case "/start" -> new ProcessingResult(responseTemplates.getMainMenuMessage(), true, false);
+            case "/help" -> new ProcessingResult(responseTemplates.getHelpMessage(), true, false);
+            case "/about" -> new ProcessingResult(responseTemplates.getAboutMessage(), true, false);
+            case "/status" -> processStatusCommand();
+            case "/models" -> new ProcessingResult(responseTemplates.getModelsMessage(), true, false);
+            case "/joke", "/анекдот" -> processJokeCommand(); // Команды для анекдотов
+            default -> {
+                if (isGroup) {
+                    yield new ProcessingResult("", false);
+                } else {
+                    yield new ProcessingResult(
+                            "❓ Неизвестная команда. Используйте /help для просмотра доступных команд.", true, false
+                    );
+                }
+            }
+        };
+    }
+
+    /**
+     * Обрабатывает команду получения анекдота
+     */
+    private ProcessingResult processJokeCommand() {
+        try {
+            String joke = jokeService.getRandomJoke();
+            String response = "🎭 **Анекдот дня:**\n\n" + joke + "\n\n😄 Надеюсь, поднял настроение!";
+            logger.info("Отправлен анекдот по команде");
+            return new ProcessingResult(response, true, false);
+        } catch (Exception e) {
+            logger.error("Ошибка при получении анекдота: {}", e.getMessage(), e);
+            return new ProcessingResult("❌ Извините, не удалось получить анекдот. Попробуйте позже.", true, false);
+        }
+    }
+
     private ProcessingResult processStatusCommand() {
         boolean isAvailable = googleAiService.isApiAvailable();
         boolean jokeServiceAvailable = jokeService.isServiceAvailable();
@@ -256,17 +311,19 @@ public class MessageProcessor {
             case "cmd_models" -> new ProcessingResult(responseTemplates.getModelsMessage(), true, false);
             case "info_creator" -> new ProcessingResult(responseTemplates.getCreatorInfoMessage(), true, true);
             case "back_main" -> new ProcessingResult(responseTemplates.getBackToMainMessage(), true, false);
-            case "cmd_joke" -> processJokeCommand(); // Добавляем callback для анекдотов
+            case "cmd_joke" -> processJokeCommand(); // Callback для анекдотов
             default -> new ProcessingResult("❓ Неизвестная команда", true, false);
         };
     }
 
     private boolean isMessageForBot(Message message) {
         String text = message.getText();
+        // Проверяем упоминание бота через @username
         if (text != null && text.contains("@")) {
             return true;
         }
 
+        // Проверяем, является ли это ответом на сообщение бота
         var reply = message.getReplyToMessage();
         return reply != null && reply.getFrom().getIsBot();
     }
