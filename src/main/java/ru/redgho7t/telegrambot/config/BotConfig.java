@@ -54,7 +54,7 @@ public class BotConfig {
         }
 
         // Проверяем дополнительные API (не критичны для работы)
-        if (weatherApiKey == null || weatherApiKey.isBlank()) {
+        if (weatherApiKey == null || weatherApiKey.isBlank() || weatherApiKey.contains("YOUR_")) {
             logger.warn("Weather API ключ не настроен - функция погоды будет недоступна");
         }
 
@@ -65,7 +65,7 @@ public class BotConfig {
         logger.info("=== КОНФИГУРАЦИЯ БОТА ===");
         logger.info("Bot Username: @{}", username);
         logger.info("Google AI API: {}", googleApiKey != null && !googleApiKey.isBlank() ? "✅ Настроен" : "❌ Не настроен");
-        logger.info("Weather API: {}", weatherApiKey != null && !weatherApiKey.isBlank() ? "✅ Настроен" : "❌ Не настроен");
+        logger.info("Weather API: {}", weatherApiKey != null && !weatherApiKey.isBlank() && !weatherApiKey.contains("YOUR_") ? "✅ Настроен" : "❌ Не настроен");
         logger.info("Jokes API URL: {}", jokeApiUrl);
         logger.info("========================");
     }
