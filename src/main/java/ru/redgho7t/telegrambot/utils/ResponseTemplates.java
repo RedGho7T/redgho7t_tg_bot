@@ -250,7 +250,7 @@ public class ResponseTemplates {
      * Реакция на слова про "попи"
      */
     public String getPopiMessage() {
-        return "Выбирайте вашу 🤡попи🤡 ( ‿ * ‿ ) (‿∣‿) (‿ˠ‿）🍑";
+        return "https://popki.top/search/?q=%D0%9F%D0%BE%D0%BF%D0%BA%D0%B8";
     }
 
     /**

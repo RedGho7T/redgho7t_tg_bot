@@ -159,6 +159,10 @@ public class TelegramAiBot extends TelegramLongPollingBot {
                 if (messageText.equals("/start") || messageText.startsWith("/start@")) {
                     keyboard = KeyboardFactory.getMainMenuKeyboard();
                 }
+// НОВАЯ ЛОГИКА: Показываем меню выбора знаков зодиака
+                else if (result.shouldShowZodiacMenu()) {
+                    keyboard = KeyboardFactory.getZodiacMenuKeyboard();
+                }
 
                 sendMessageWithKeyboard(chatId, result.getResponse(), keyboard);
             }

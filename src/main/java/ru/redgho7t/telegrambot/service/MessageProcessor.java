@@ -16,7 +16,7 @@ import java.util.List;
 
 /**
  * Сервис для обработки сообщений от пользователей.
- * ИСПРАВЛЕНО: Добавлен @Service для работы Spring DI
+ * ОБНОВЛЁН: Добавлено интерактивное меню выбора знаков зодиака
  */
 @Service
 public class MessageProcessor {
@@ -62,8 +62,12 @@ public class MessageProcessor {
             "погода", "weather", "прогноз", "температура", "дождь", "снег", "солнце"
     );
 
-    private static final List<String> HOROSCOPE_TRIGGER_WORDS = Arrays.asList(
-            "гороскоп", "horoscope", "предсказание", "зодиак", "знак", "астрология",
+    // ИЗМЕНЕНО: Разделил гороскопы на общие слова и конкретные знаки
+    private static final List<String> HOROSCOPE_GENERAL_WORDS = Arrays.asList(
+            "гороскоп", "horoscope", "предсказание", "зодиак", "знак", "астрология"
+    );
+
+    private static final List<String> ZODIAC_SIGNS = Arrays.asList(
             "овен", "телец", "близнецы", "рак", "лев", "дева", "весы",
             "скорпион", "стрелец", "козерог", "водолей", "рыбы"
     );
@@ -90,7 +94,7 @@ public class MessageProcessor {
         this.responseTemplates = new ResponseTemplates();
         this.keywordTemplates = initializeKeywordTemplates();
 
-        logger.info("✅ MessageProcessor инициализирован со всеми сервисами");
+        logger.info("✅ MessageProcessor инициализирован со всеми сервисами + меню зодиака");
     }
 
     private Map<String, String> initializeKeywordTemplates() {
@@ -171,7 +175,7 @@ public class MessageProcessor {
     }
 
     /**
-     * ИСПРАВЛЕННЫЙ МЕТОД: Проверяет новые функции (анекдоты, погода, гороскопы, рулетка)
+     * ОБНОВЛЕННЫЙ МЕТОД: Проверяет новые функции с интерактивным меню гороскопов
      */
     private ProcessingResult checkNewFunctions(String messageText) {
         String[] tokens = messageText.toLowerCase().split("[^\\p{L}]+");
@@ -216,38 +220,29 @@ public class MessageProcessor {
                 }
             }
 
-            // 4. ГОРОСКОПЫ (приоритет 4)
-            if (HOROSCOPE_TRIGGER_WORDS.contains(token)) {
-                logger.info("🔮 Запрос гороскопа: {}", token);
+            // 4. ГОРОСКОПЫ (приоритет 4) - НОВАЯ ЛОГИКА
+            // 4a. Конкретный знак зодиака → сразу показать гороскоп
+            if (ZODIAC_SIGNS.contains(token)) {
+                logger.info("🔮 Запрос гороскопа для знака: {}", token);
                 try {
-                    // Если это знак зодиака, возвращаем гороскоп для него
-                    if (isZodiacSign(token)) {
-                        String horoscope = horoscopeService.getHoroscope(token);
-                        return new ProcessingResult(horoscope, true, false);
-                    } else {
-                        // Иначе возвращаем случайный гороскоп
-                        String horoscope = horoscopeService.getRandomHoroscope();
-                        return new ProcessingResult(horoscope, true, false);
-                    }
+                    String horoscope = horoscopeService.getHoroscope(token);
+                    return new ProcessingResult(horoscope, true, false);
                 } catch (Exception e) {
                     logger.error("❌ Ошибка при получении гороскопа: {}", e.getMessage());
                     return new ProcessingResult("❌ Гороскоп временно недоступен. Попробуйте позже!", true, false);
                 }
             }
+
+            // 4b. Общее слово "гороскоп" → показать меню выбора
+            if (HOROSCOPE_GENERAL_WORDS.contains(token)) {
+                logger.info("🔮 Запрос общего гороскопа: показать меню выбора");
+                String menuMessage = "🔮 **Выберите ваш знак зодиака:**\n\n" +
+                        "Нажмите на кнопку с вашим знаком, чтобы получить персональный гороскоп на сегодня.";
+                return new ProcessingResult(menuMessage, true, false, false, true); // Новый флаг для меню зодиака
+            }
         }
 
         return null; // Новые функции не обнаружены
-    }
-
-    /**
-     * Проверяет, является ли слово знаком зодиака
-     */
-    private boolean isZodiacSign(String word) {
-        List<String> zodiacSigns = Arrays.asList(
-                "овен", "телец", "близнецы", "рак", "лев", "дева",
-                "весы", "скорпион", "стрелец", "козерог", "водолей", "рыбы"
-        );
-        return zodiacSigns.contains(word.toLowerCase());
     }
 
     /**
@@ -322,14 +317,12 @@ public class MessageProcessor {
                 }
             }
 
+            // ИЗМЕНЕНО: /horoscope теперь тоже показывает меню
             case "/horoscope", "/гороскоп" -> {
-                try {
-                    String horoscope = horoscopeService.getRandomHoroscope();
-                    yield new ProcessingResult(horoscope, true, false);
-                } catch (Exception e) {
-                    logger.error("❌ Ошибка команды /horoscope: {}", e.getMessage());
-                    yield new ProcessingResult("❌ Гороскоп временно недоступен.", true, false);
-                }
+                logger.info("🔮 Команда гороскопа: показать меню выбора");
+                String menuMessage = "🔮 **Выберите ваш знак зодиака:**\n\n" +
+                        "Нажмите на кнопку с вашим знаком, чтобы получить персональный гороскоп на сегодня.";
+                yield new ProcessingResult(menuMessage, true, false, false, true); // Показать меню зодиака
             }
 
             case "/lucky", "/рулетка" -> {
@@ -369,7 +362,7 @@ public class MessageProcessor {
         message.append(weatherService.getServiceStatus()).append("\\n");
         message.append(horoscopeService.getServiceStatus()).append("\\n");
         message.append("🎰 Рулетка: ✅ Активна\\n");
-        message.append("\\nВремя работы: активен\\nВерсия: 2.0.0");
+        message.append("\\nВремя работы: активен\\nВерсия: 2.1.0 (с меню зодиака)");
 
         return new ProcessingResult(message.toString(), true, false);
     }
@@ -401,10 +394,40 @@ public class MessageProcessor {
         return messageText;
     }
 
+    /**
+     * ОБНОВЛЕННЫЙ МЕТОД: Обрабатывает callback запросы включая выбор знаков зодиака
+     */
     private ProcessingResult processCallbackQuery(CallbackQuery callbackQuery) {
         String data = callbackQuery.getData();
         logger.info("Получен callback: {}", data);
 
+        // НОВАЯ ЛОГИКА: Обработка выбора знаков зодиака
+        if (data.startsWith("horoscope_")) {
+            String zodiacSign = data.substring("horoscope_".length());
+            logger.info("🔮 Выбран знак зодиака: {}", zodiacSign);
+
+            if ("random".equals(zodiacSign)) {
+                // Случайный гороскоп
+                try {
+                    String horoscope = horoscopeService.getRandomHoroscope();
+                    return new ProcessingResult(horoscope, true, false);
+                } catch (Exception e) {
+                    logger.error("❌ Ошибка при получении случайного гороскопа: {}", e.getMessage());
+                    return new ProcessingResult("❌ Гороскоп временно недоступен.", true, false);
+                }
+            } else {
+                // Конкретный знак
+                try {
+                    String horoscope = horoscopeService.getHoroscope(zodiacSign);
+                    return new ProcessingResult(horoscope, true, false);
+                } catch (Exception e) {
+                    logger.error("❌ Ошибка при получении гороскопа для {}: {}", zodiacSign, e.getMessage());
+                    return new ProcessingResult("❌ Гороскоп для " + zodiacSign + " временно недоступен.", true, false);
+                }
+            }
+        }
+
+        // Существующие callback'и
         return switch (data) {
             case "cmd_about" -> new ProcessingResult(responseTemplates.getAboutMessage(), true, false);
             case "cmd_help" -> new ProcessingResult(responseTemplates.getHelpMessage(), true, false);
@@ -438,42 +461,42 @@ public class MessageProcessor {
         return (first + last).isBlank() ? "Unknown User" : first + last;
     }
 
+    /**
+     * ОБНОВЛЕННЫЙ ProcessingResult с поддержкой меню зодиака
+     */
     public static class ProcessingResult {
         private final String response;
         private final boolean shouldReply;
         private final boolean showCreatorKeyboard;
-        private final boolean needsRouletteAnimation; // НОВОЕ ПОЛЕ
+        private final boolean needsRouletteAnimation;
+        private final boolean showZodiacMenu; // НОВОЕ ПОЛЕ
 
         public ProcessingResult(String response, boolean shouldReply) {
-            this(response, shouldReply, false, false);
+            this(response, shouldReply, false, false, false);
         }
 
         public ProcessingResult(String response, boolean shouldReply, boolean showCreatorKeyboard) {
-            this(response, shouldReply, showCreatorKeyboard, false);
+            this(response, shouldReply, showCreatorKeyboard, false, false);
         }
 
-        // НОВЫЙ КОНСТРУКТОР с поддержкой анимации рулетки
         public ProcessingResult(String response, boolean shouldReply, boolean showCreatorKeyboard, boolean needsRouletteAnimation) {
+            this(response, shouldReply, showCreatorKeyboard, needsRouletteAnimation, false);
+        }
+
+        // НОВЫЙ КОНСТРУКТОР с поддержкой меню зодиака
+        public ProcessingResult(String response, boolean shouldReply, boolean showCreatorKeyboard,
+                                boolean needsRouletteAnimation, boolean showZodiacMenu) {
             this.response = response;
             this.shouldReply = shouldReply;
             this.showCreatorKeyboard = showCreatorKeyboard;
             this.needsRouletteAnimation = needsRouletteAnimation;
+            this.showZodiacMenu = showZodiacMenu;
         }
 
-        public String getResponse() {
-            return response;
-        }
-
-        public boolean shouldReply() {
-            return shouldReply;
-        }
-
-        public boolean shouldShowCreatorKeyboard() {
-            return showCreatorKeyboard;
-        }
-
-        public boolean needsRouletteAnimation() {
-            return needsRouletteAnimation;
-        } // НОВЫЙ ГЕТТЕР
+        public String getResponse() { return response; }
+        public boolean shouldReply() { return shouldReply; }
+        public boolean shouldShowCreatorKeyboard() { return showCreatorKeyboard; }
+        public boolean needsRouletteAnimation() { return needsRouletteAnimation; }
+        public boolean shouldShowZodiacMenu() { return showZodiacMenu; } // НОВЫЙ ГЕТТЕР
     }
 }
