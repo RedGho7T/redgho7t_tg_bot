@@ -2,11 +2,12 @@ package ru.redgho7t.telegrambot.service;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import ru.redgho7t.telegrambot.utils.ResponseTemplates;
-import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -15,8 +16,9 @@ import java.util.List;
 
 /**
  * Сервис для обработки сообщений от пользователей.
- * ОБНОВЛЁН: Добавлена поддержка новых функций (анекдоты, погода, гороскопы, рулетка)
+ * ИСПРАВЛЕНО: Добавлен @Service для работы Spring DI
  */
+@Service
 public class MessageProcessor {
     private static final Logger logger = LoggerFactory.getLogger(MessageProcessor.class);
 
@@ -24,18 +26,11 @@ public class MessageProcessor {
     private final Map<String, String> keywordTemplates;
     private final GoogleAiService googleAiService;
 
-    // НОВЫЕ СЕРВИСЫ для дополнительных функций
-    @Autowired
-    private JokeService jokeService;
-
-    @Autowired
-    private WeatherService weatherService;
-
-    @Autowired
-    private HoroscopeService horoscopeService;
-
-    @Autowired
-    private RouletteService rouletteService;
+    // ИСПРАВЛЕНО: Инъекция через конструктор вместо @Autowired полей
+    private final JokeService jokeService;
+    private final WeatherService weatherService;
+    private final HoroscopeService horoscopeService;
+    private final RouletteService rouletteService;
 
     // Ключевые слова для разных реакций (в нижнем регистре)
     private static final List<String> BOT_TRIGGER_WORDS = Arrays.asList(
@@ -78,14 +73,24 @@ public class MessageProcessor {
     );
 
     /**
-     * Конструктор процессора сообщений.
-     * @param googleAiService сервис для работы с Google Gemini AI
+     * ИСПРАВЛЕННЫЙ КОНСТРУКТОР с инъекцией всех сервисов
      */
-    public MessageProcessor(GoogleAiService googleAiService) {
+    @Autowired
+    public MessageProcessor(GoogleAiService googleAiService,
+                            JokeService jokeService,
+                            WeatherService weatherService,
+                            HoroscopeService horoscopeService,
+                            RouletteService rouletteService) {
         this.googleAiService = googleAiService;
+        this.jokeService = jokeService;
+        this.weatherService = weatherService;
+        this.horoscopeService = horoscopeService;
+        this.rouletteService = rouletteService;
+
         this.responseTemplates = new ResponseTemplates();
         this.keywordTemplates = initializeKeywordTemplates();
-        logger.info("MessageProcessor инициализирован с GoogleAiService и новыми функциями");
+
+        logger.info("✅ MessageProcessor инициализирован со всеми сервисами");
     }
 
     private Map<String, String> initializeKeywordTemplates() {
@@ -166,7 +171,7 @@ public class MessageProcessor {
     }
 
     /**
-     * НОВЫЙ МЕТОД: Проверяет новые функции (анекдоты, погода, гороскопы, рулетка)
+     * ИСПРАВЛЕННЫЙ МЕТОД: Проверяет новые функции (анекдоты, погода, гороскопы, рулетка)
      */
     private ProcessingResult checkNewFunctions(String messageText) {
         String[] tokens = messageText.toLowerCase().split("[^\\p{L}]+");
@@ -174,46 +179,46 @@ public class MessageProcessor {
         for (String token : tokens) {
             // 1. АНЕКДОТЫ (приоритет 1)
             if (JOKE_TRIGGER_WORDS.contains(token)) {
-                logger.info("Запрос анекдота: {}", token);
+                logger.info("🎭 Запрос анекдота: {}", token);
                 try {
                     String joke = jokeService.getRandomJoke();
                     String response = responseTemplates.getJokeIntroMessage() + joke;
                     return new ProcessingResult(response, true, false);
                 } catch (Exception e) {
-                    logger.error("Ошибка при получении анекдота: {}", e.getMessage());
+                    logger.error("❌ Ошибка при получении анекдота: {}", e.getMessage());
                     return new ProcessingResult(responseTemplates.getJokeErrorMessage(), true, false);
                 }
             }
 
             // 2. РУЛЕТКА (приоритет 2)
             if (ROULETTE_TRIGGER_WORDS.contains(token)) {
-                logger.info("Запрос рулетки: {}", token);
+                logger.info("🎰 Запрос рулетки: {}", token);
                 try {
                     RouletteService.RouletteResult result = rouletteService.spin();
                     String response = rouletteService.formatResult(result);
                     // Указываем специальный флаг для анимации
                     return new ProcessingResult(response, true, false, true);
                 } catch (Exception e) {
-                    logger.error("Ошибка при работе рулетки: {}", e.getMessage());
+                    logger.error("❌ Ошибка при работе рулетки: {}", e.getMessage());
                     return new ProcessingResult("❌ Рулетка временно не работает. Попробуйте позже!", true, false);
                 }
             }
 
             // 3. ПОГОДА (приоритет 3)
             if (WEATHER_TRIGGER_WORDS.contains(token)) {
-                logger.info("Запрос погоды: {}", token);
+                logger.info("🌤️ Запрос погоды: {}", token);
                 try {
                     String weather = weatherService.getWeather();
                     return new ProcessingResult(weather, true, false);
                 } catch (Exception e) {
-                    logger.error("Ошибка при получении погоды: {}", e.getMessage());
+                    logger.error("❌ Ошибка при получении погоды: {}", e.getMessage());
                     return new ProcessingResult(responseTemplates.getWeatherErrorMessage(), true, false);
                 }
             }
 
             // 4. ГОРОСКОПЫ (приоритет 4)
             if (HOROSCOPE_TRIGGER_WORDS.contains(token)) {
-                logger.info("Запрос гороскопа: {}", token);
+                logger.info("🔮 Запрос гороскопа: {}", token);
                 try {
                     // Если это знак зодиака, возвращаем гороскоп для него
                     if (isZodiacSign(token)) {
@@ -225,7 +230,7 @@ public class MessageProcessor {
                         return new ProcessingResult(horoscope, true, false);
                     }
                 } catch (Exception e) {
-                    logger.error("Ошибка при получении гороскопа: {}", e.getMessage());
+                    logger.error("❌ Ошибка при получении гороскопа: {}", e.getMessage());
                     return new ProcessingResult("❌ Гороскоп временно недоступен. Попробуйте позже!", true, false);
                 }
             }
@@ -280,7 +285,6 @@ public class MessageProcessor {
                 return new ProcessingResult(responseTemplates.getGoMessage(), true, false);
             }
         }
-
         return null;
     }
 
@@ -297,37 +301,44 @@ public class MessageProcessor {
             case "/status" -> processStatusCommand();
             case "/models" -> new ProcessingResult(responseTemplates.getModelsMessage(), true, false);
 
-            // НОВЫЕ КОМАНДЫ
+            // ИСПРАВЛЕННЫЕ НОВЫЕ КОМАНДЫ
             case "/joke", "/анекдот" -> {
                 try {
                     String joke = jokeService.getRandomJoke();
                     yield new ProcessingResult(responseTemplates.getJokeIntroMessage() + joke, true, false);
                 } catch (Exception e) {
+                    logger.error("❌ Ошибка команды /joke: {}", e.getMessage());
                     yield new ProcessingResult(responseTemplates.getJokeErrorMessage(), true, false);
                 }
             }
+
             case "/weather", "/погода" -> {
                 try {
                     String weather = weatherService.getWeather();
                     yield new ProcessingResult(weather, true, false);
                 } catch (Exception e) {
+                    logger.error("❌ Ошибка команды /weather: {}", e.getMessage());
                     yield new ProcessingResult(responseTemplates.getWeatherErrorMessage(), true, false);
                 }
             }
+
             case "/horoscope", "/гороскоп" -> {
                 try {
                     String horoscope = horoscopeService.getRandomHoroscope();
                     yield new ProcessingResult(horoscope, true, false);
                 } catch (Exception e) {
+                    logger.error("❌ Ошибка команды /horoscope: {}", e.getMessage());
                     yield new ProcessingResult("❌ Гороскоп временно недоступен.", true, false);
                 }
             }
+
             case "/lucky", "/рулетка" -> {
                 try {
                     RouletteService.RouletteResult result = rouletteService.spin();
                     String response = rouletteService.formatResult(result);
                     yield new ProcessingResult(response, true, false, true);
                 } catch (Exception e) {
+                    logger.error("❌ Ошибка команды /lucky: {}", e.getMessage());
                     yield new ProcessingResult("❌ Рулетка временно не работает.", true, false);
                 }
             }
@@ -350,16 +361,15 @@ public class MessageProcessor {
 
         // Добавляем статус новых сервисов
         StringBuilder message = new StringBuilder();
-        message.append(String.format("🤖 **Статус бота:**\n\nAI API: %s\n", status));
+        message.append(String.format("🤖 **Статус бота:**\\n\\nAI API: %s\\n", status));
 
         // Статус дополнительных сервисов
-        message.append("\n**Дополнительные сервисы:**\n");
-        message.append("😄 Анекдоты: ✅ Активен\n");
-        message.append(weatherService.getServiceStatus()).append("\n");
-        message.append(horoscopeService.getServiceStatus()).append("\n");
-        message.append("🎰 Рулетка: ✅ Активна\n");
-
-        message.append("\nВремя работы: активен\nВерсия: 2.0.0");
+        message.append("\\n**Дополнительные сервисы:**\\n");
+        message.append("😄 Анекдоты: ✅ Активен\\n");
+        message.append(weatherService.getServiceStatus()).append("\\n");
+        message.append(horoscopeService.getServiceStatus()).append("\\n");
+        message.append("🎰 Рулетка: ✅ Активна\\n");
+        message.append("\\nВремя работы: активен\\nВерсия: 2.0.0");
 
         return new ProcessingResult(message.toString(), true, false);
     }
@@ -379,6 +389,7 @@ public class MessageProcessor {
 
     private String enhanceMessageWithTemplate(String messageText) {
         String lower = messageText.toLowerCase();
+
         for (var entry : keywordTemplates.entrySet()) {
             if (lower.contains(entry.getKey())) {
                 String template = entry.getValue();
@@ -419,6 +430,7 @@ public class MessageProcessor {
         var from = message.getFrom();
         String first = from.getFirstName() != null ? from.getFirstName() : "";
         String last = from.getLastName() != null ? " " + from.getLastName() : "";
+
         if ((first + last).isBlank() && from.getUserName() != null) {
             return "@" + from.getUserName();
         }
@@ -448,9 +460,20 @@ public class MessageProcessor {
             this.needsRouletteAnimation = needsRouletteAnimation;
         }
 
-        public String getResponse() { return response; }
-        public boolean shouldReply() { return shouldReply; }
-        public boolean shouldShowCreatorKeyboard() { return showCreatorKeyboard; }
-        public boolean needsRouletteAnimation() { return needsRouletteAnimation; } // НОВЫЙ ГЕТТЕР
+        public String getResponse() {
+            return response;
+        }
+
+        public boolean shouldReply() {
+            return shouldReply;
+        }
+
+        public boolean shouldShowCreatorKeyboard() {
+            return showCreatorKeyboard;
+        }
+
+        public boolean needsRouletteAnimation() {
+            return needsRouletteAnimation;
+        } // НОВЫЙ ГЕТТЕР
     }
 }

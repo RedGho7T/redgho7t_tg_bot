@@ -14,7 +14,6 @@ import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 import ru.redgho7t.telegrambot.config.BotConfig;
 import ru.redgho7t.telegrambot.entity.MessageLog.MessageType;
 import ru.redgho7t.telegrambot.service.DatabaseService;
-import ru.redgho7t.telegrambot.service.GoogleAiService;
 import ru.redgho7t.telegrambot.service.MessageProcessor;
 import ru.redgho7t.telegrambot.utils.KeyboardFactory;
 import ru.redgho7t.telegrambot.utils.MessageSplitter;
@@ -22,37 +21,28 @@ import ru.redgho7t.telegrambot.utils.MessageSplitter;
 import java.util.List;
 
 /**
- * Основной класс Telegram AI Bot с поддержкой базы данных
- * ОБНОВЛЁН: Добавлена поддержка анимации рулетки через Dice API
+ * Основной класс Telegram AI Bot с поддержкой всех сервисов
+ * ИСПРАВЛЕНО: MessageProcessor теперь инжектируется через @Autowired
  */
 @Component
 public class TelegramAiBot extends TelegramLongPollingBot {
     private static final Logger logger = LoggerFactory.getLogger(TelegramAiBot.class);
-    private static final int MESSAGE_DELAY = 200; // Задержка между сообщениями в мс
-    private static final int ROULETTE_ANIMATION_DELAY = 4000; // Задержка для анимации рулетки
+    private static final int MESSAGE_DELAY = 200;
+    private static final int ROULETTE_ANIMATION_DELAY = 4000;
 
     private final BotConfig config;
     private final MessageProcessor messageProcessor;
     private final DatabaseService databaseService;
 
     @Autowired
-    public TelegramAiBot(BotConfig config, DatabaseService databaseService) {
+    public TelegramAiBot(BotConfig config,
+                         MessageProcessor messageProcessor,
+                         DatabaseService databaseService) {
         this.config = config;
+        this.messageProcessor = messageProcessor; // Spring сам инжектирует готовый бин
         this.databaseService = databaseService;
 
-        // Получаем Google API ключ из BotConfig
-        String googleKey = config.getGoogleApiKey();
-
-        // Инициализируем сервис для Google Gemini API
-        GoogleAiService googleAiService = new GoogleAiService(googleKey);
-
-        // Передаём сервис в MessageProcessor
-        this.messageProcessor = new MessageProcessor(googleAiService);
-
-        logger.info("🤖 TelegramAiBot v2.0 инициализирован для @{} с поддержкой БД и новыми функциями",
-                config.getBotUsername());
-
-        // Логируем конфигурацию
+        logger.info("🤖 TelegramAiBot v2.0 инициализирован для @{} с полным Spring DI", config.getBotUsername());
         config.logConfiguration();
     }
 
