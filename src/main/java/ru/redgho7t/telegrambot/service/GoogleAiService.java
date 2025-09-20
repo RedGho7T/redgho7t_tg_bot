@@ -2,6 +2,7 @@ package ru.redgho7t.telegrambot.service;
 
 import okhttp3.*;
 import com.google.gson.*;
+import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
@@ -9,6 +10,7 @@ import java.util.concurrent.TimeUnit;
 /**
 * Сервис для взаимодействия с Google Gemini API через Google AI Studio.
 */
+@Service
 public class GoogleAiService {
 private static final String BASE_URL =
         "https://generativelanguage.googleapis.com/v1beta/models/";
