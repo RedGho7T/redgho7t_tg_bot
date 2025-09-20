@@ -6,6 +6,7 @@ import org.telegram.telegrambots.meta.api.objects.CallbackQuery;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import ru.redgho7t.telegrambot.utils.ResponseTemplates;
+import org.springframework.beans.factory.annotation.Autowired;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -14,52 +15,77 @@ import java.util.List;
 
 /**
  * Сервис для обработки сообщений от пользователей.
- * Заменён PerplexityService на GoogleAiService для взаимодействия с Gemini API.
- * Добавлена поддержка анекдотов через JokeService.
+ * ОБНОВЛЁН: Добавлена поддержка новых функций (анекдоты, погода, гороскопы, рулетка)
  */
 public class MessageProcessor {
-
     private static final Logger logger = LoggerFactory.getLogger(MessageProcessor.class);
 
     private final ResponseTemplates responseTemplates;
     private final Map<String, String> keywordTemplates;
     private final GoogleAiService googleAiService;
-    private final JokeService jokeService; // Сервис анекдотов
+
+    // НОВЫЕ СЕРВИСЫ для дополнительных функций
+    @Autowired
+    private JokeService jokeService;
+
+    @Autowired
+    private WeatherService weatherService;
+
+    @Autowired
+    private HoroscopeService horoscopeService;
+
+    @Autowired
+    private RouletteService rouletteService;
 
     // Ключевые слова для разных реакций (в нижнем регистре)
     private static final List<String> BOT_TRIGGER_WORDS = Arrays.asList(
-            "бот", "ботяра", "bot", "botyara", "попи", "popi",
-            "java", "жаби", "jabi", "го", "go", "айди", "ai"
+            "бот", "ботяра", "bot", "botyara", "botik", "chlenix", "bobi", "botniy"
     );
 
-    // Специальные ключевые слова и их ответы
-    private static final Map<String, String> SPECIAL_RESPONSES = new HashMap<>();
-    static {
-        SPECIAL_RESPONSES.put("попи", "🐸 Попи жив и здоров!");
-        SPECIAL_RESPONSES.put("popi", "🐸 Popi is alive and well!");
-        SPECIAL_RESPONSES.put("java", "☕ Java - лучший язык программирования!");
-        SPECIAL_RESPONSES.put("жаби", "☕ Жаба рулит!");
-        SPECIAL_RESPONSES.put("jabi", "☕ Java rocks!");
-        SPECIAL_RESPONSES.put("го", "🚀 Поехали!");
-        SPECIAL_RESPONSES.put("go", "🚀 Let's go!");
-        SPECIAL_RESPONSES.put("айди", "🤖 AI Bot к вашим услугам!");
-        SPECIAL_RESPONSES.put("ai", "🤖 AI Bot at your service!");
-        SPECIAL_RESPONSES.put("ботяра", "🤖 Ботяра на связи!");
-        SPECIAL_RESPONSES.put("botyara", "🤖 Botyara is online!");
-    }
+    private static final List<String> POPI_TRIGGER_WORDS = Arrays.asList(
+            "попи", "popi", "пупстерс", "попикс", "попа"
+    );
+
+    private static final List<String> JAVA_TRIGGER_WORDS = Arrays.asList(
+            "java", "jabi"
+    );
+
+    private static final List<String> GO_TRIGGER_WORDS = Arrays.asList(
+            "go", "го", "гоу"
+    );
+
+    private static final List<String> JABI_TRIGGER_WORDS = Arrays.asList(
+            "jabi", "JABI", "жаби", "jabbi", "JABA", "ЖАБИ"
+    );
+
+    // НОВЫЕ КЛЮЧЕВЫЕ СЛОВА для дополнительных функций
+    private static final List<String> JOKE_TRIGGER_WORDS = Arrays.asList(
+            "анекдот", "шутка", "прикол", "joke", "юмор", "смешное", "рассмеши"
+    );
+
+    private static final List<String> WEATHER_TRIGGER_WORDS = Arrays.asList(
+            "погода", "weather", "прогноз", "температура", "дождь", "снег", "солнце"
+    );
+
+    private static final List<String> HOROSCOPE_TRIGGER_WORDS = Arrays.asList(
+            "гороскоп", "horoscope", "предсказание", "зодиак", "знак", "астрология",
+            "овен", "телец", "близнецы", "рак", "лев", "дева", "весы",
+            "скорпион", "стрелец", "козерог", "водолей", "рыбы"
+    );
+
+    private static final List<String> ROULETTE_TRIGGER_WORDS = Arrays.asList(
+            "lucky", "рулетка", "удача", "везение", "лотерея", "случайное", "число", "фортуна"
+    );
 
     /**
      * Конструктор процессора сообщений.
-     *
-     * @param googleAiService сервис для работы с Google Gemini API
-     * @param jokeService сервис для получения анекдотов
+     * @param googleAiService сервис для работы с Google Gemini AI
      */
-    public MessageProcessor(GoogleAiService googleAiService, JokeService jokeService) {
+    public MessageProcessor(GoogleAiService googleAiService) {
         this.googleAiService = googleAiService;
-        this.jokeService = jokeService;
         this.responseTemplates = new ResponseTemplates();
         this.keywordTemplates = initializeKeywordTemplates();
-        logger.info("MessageProcessor инициализирован с GoogleAiService и JokeService");
+        logger.info("MessageProcessor инициализирован с GoogleAiService и новыми функциями");
     }
 
     private Map<String, String> initializeKeywordTemplates() {
@@ -80,14 +106,6 @@ public class MessageProcessor {
         templates.put("compare", "Compare ");
         templates.put("разница", "В чем разница между ");
         templates.put("difference", "What's the difference between ");
-
-        // Шаблоны для анекдотов
-        templates.put("анекдот", "🤣 Анекдот для поднятия настроения:");
-        templates.put("шутка", "😄 Вот забавная шутка:");
-        templates.put("расскажи анекдот", "🎭 Держи анекдот:");
-        templates.put("joke", "😂 Here's a joke for you:");
-        templates.put("tell me a joke", "🤣 Here's a funny one:");
-
         return templates;
     }
 
@@ -121,120 +139,199 @@ public class MessageProcessor {
 
         logger.info("Получено сообщение от {}: {}", userName, messageText);
 
-        // 1. Проверяем команды первыми (работают везде)
+        // 1. Проверяем команды первыми
         if (messageText.startsWith("/")) {
             return processCommand(messageText, chatId, isGroup);
         }
 
-        // 2. Проверяем специальные ключевые слова (работают везде)
+        // 2. НОВАЯ ЛОГИКА: Проверяем специальные функции ПЕРЕД существующими ключевыми словами
+        ProcessingResult newFunctionResult = checkNewFunctions(messageText);
+        if (newFunctionResult != null) {
+            return newFunctionResult;
+        }
+
+        // 3. Проверяем существующие специальные ключевые слова
         ProcessingResult specialResponse = checkSpecialKeywords(messageText);
         if (specialResponse != null) {
             return specialResponse;
         }
 
-        // 3. Проверяем запросы на анекдоты (работают везде)
-        if (isJokeRequest(messageText)) {
-            return processJokeRequest(messageText);
-        }
-
-        // 4. ТОЛЬКО для AI-запросов проверяем, обращаются ли к боту в группах
+        // 4. Для групп проверяем, обращаются ли к боту
         if (isGroup && !isMessageForBot(message)) {
             return new ProcessingResult("", false);
         }
 
+        // 5. AI-ассистент как fallback
         return processUserMessage(messageText, userName);
+    }
+
+    /**
+     * НОВЫЙ МЕТОД: Проверяет новые функции (анекдоты, погода, гороскопы, рулетка)
+     */
+    private ProcessingResult checkNewFunctions(String messageText) {
+        String[] tokens = messageText.toLowerCase().split("[^\\p{L}]+");
+
+        for (String token : tokens) {
+            // 1. АНЕКДОТЫ (приоритет 1)
+            if (JOKE_TRIGGER_WORDS.contains(token)) {
+                logger.info("Запрос анекдота: {}", token);
+                try {
+                    String joke = jokeService.getRandomJoke();
+                    String response = responseTemplates.getJokeIntroMessage() + joke;
+                    return new ProcessingResult(response, true, false);
+                } catch (Exception e) {
+                    logger.error("Ошибка при получении анекдота: {}", e.getMessage());
+                    return new ProcessingResult(responseTemplates.getJokeErrorMessage(), true, false);
+                }
+            }
+
+            // 2. РУЛЕТКА (приоритет 2)
+            if (ROULETTE_TRIGGER_WORDS.contains(token)) {
+                logger.info("Запрос рулетки: {}", token);
+                try {
+                    RouletteService.RouletteResult result = rouletteService.spin();
+                    String response = rouletteService.formatResult(result);
+                    // Указываем специальный флаг для анимации
+                    return new ProcessingResult(response, true, false, true);
+                } catch (Exception e) {
+                    logger.error("Ошибка при работе рулетки: {}", e.getMessage());
+                    return new ProcessingResult("❌ Рулетка временно не работает. Попробуйте позже!", true, false);
+                }
+            }
+
+            // 3. ПОГОДА (приоритет 3)
+            if (WEATHER_TRIGGER_WORDS.contains(token)) {
+                logger.info("Запрос погоды: {}", token);
+                try {
+                    String weather = weatherService.getWeather();
+                    return new ProcessingResult(weather, true, false);
+                } catch (Exception e) {
+                    logger.error("Ошибка при получении погоды: {}", e.getMessage());
+                    return new ProcessingResult(responseTemplates.getWeatherErrorMessage(), true, false);
+                }
+            }
+
+            // 4. ГОРОСКОПЫ (приоритет 4)
+            if (HOROSCOPE_TRIGGER_WORDS.contains(token)) {
+                logger.info("Запрос гороскопа: {}", token);
+                try {
+                    // Если это знак зодиака, возвращаем гороскоп для него
+                    if (isZodiacSign(token)) {
+                        String horoscope = horoscopeService.getHoroscope(token);
+                        return new ProcessingResult(horoscope, true, false);
+                    } else {
+                        // Иначе возвращаем случайный гороскоп
+                        String horoscope = horoscopeService.getRandomHoroscope();
+                        return new ProcessingResult(horoscope, true, false);
+                    }
+                } catch (Exception e) {
+                    logger.error("Ошибка при получении гороскопа: {}", e.getMessage());
+                    return new ProcessingResult("❌ Гороскоп временно недоступен. Попробуйте позже!", true, false);
+                }
+            }
+        }
+
+        return null; // Новые функции не обнаружены
+    }
+
+    /**
+     * Проверяет, является ли слово знаком зодиака
+     */
+    private boolean isZodiacSign(String word) {
+        List<String> zodiacSigns = Arrays.asList(
+                "овен", "телец", "близнецы", "рак", "лев", "дева",
+                "весы", "скорпион", "стрелец", "козерог", "водолей", "рыбы"
+        );
+        return zodiacSigns.contains(word.toLowerCase());
     }
 
     /**
      * Проверяет специальные ключевые слова и возвращает соответствующий ответ
      */
     private ProcessingResult checkSpecialKeywords(String messageText) {
-        String lowerText = messageText.toLowerCase();
+        // Разбиваем на слова: все подряд non-letters как разделители
+        String[] tokens = messageText.toLowerCase().split("[^\\p{L}]+");
 
-        for (String keyword : BOT_TRIGGER_WORDS) {
-            if (lowerText.contains(keyword)) {
-                String response = SPECIAL_RESPONSES.get(keyword);
-                if (response != null) {
-                    logger.info("Найдено специальное ключевое слово: {}", keyword);
-                    return new ProcessingResult(response, true, false);
+        for (String token : tokens) {
+            // обращение к боту
+            if (BOT_TRIGGER_WORDS.contains(token)) {
+                return new ProcessingResult(responseTemplates.getBotResponseMessage(), true, false);
+            }
+
+            // попи
+            if (POPI_TRIGGER_WORDS.contains(token)) {
+                return new ProcessingResult(responseTemplates.getPopiMessage(), true, false);
+            }
+
+            for (String trigger : JABI_TRIGGER_WORDS) {
+                if (Arrays.asList(tokens).contains(trigger)) {
+                    logger.info("Обнаружено ключевое слово JABI: {}", trigger);
+                    return new ProcessingResult(responseTemplates.getJabiMessage(), true, false);
                 }
+            }
 
-                // Если нет специального ответа, возвращаем общий ответ
-                return new ProcessingResult("🤖 " + keyword + " - я тебя слышу!", true, false);
+            // Java
+            if (JAVA_TRIGGER_WORDS.contains(token)) {
+                return new ProcessingResult(responseTemplates.getJavaMessage(), true, false);
+            }
+
+            // Go
+            if (GO_TRIGGER_WORDS.contains(token)) {
+                return new ProcessingResult(responseTemplates.getGoMessage(), true, false);
             }
         }
 
-        return null; // Ключевые слова не найдены
-    }
-
-    /**
-     * Проверяет, является ли сообщение запросом на анекдот
-     */
-    private boolean isJokeRequest(String messageText) {
-        String lowerText = messageText.toLowerCase().trim();
-
-        // Точные совпадения
-        if (lowerText.equals("анекдот") || lowerText.equals("шутка") ||
-                lowerText.equals("joke") || lowerText.equals("анекдотик")) {
-            return true;
-        }
-
-        // Фразы с запросом анекдота
-        String[] jokePatterns = {
-                "расскажи анекдот", "расскажи шутку", "давай анекдот",
-                "хочу анекдот", "дай анекдот", "покажи анекдот",
-                "tell me a joke", "tell a joke", "give me a joke",
-                "анекдот плз", "анекдот пожалуйста", "шутку пожалуйста"
-        };
-
-        for (String pattern : jokePatterns) {
-            if (lowerText.contains(pattern)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    /**
-     * Обрабатывает запрос на анекдот
-     */
-    private ProcessingResult processJokeRequest(String messageText) {
-        try {
-            String joke = jokeService.getRandomJoke();
-            String template = getJokeTemplate(messageText.toLowerCase());
-            String response = template + "\n\n" + joke + "\n\n😊 Хотите ещё? Просто напишите \"анекдот\"!";
-
-            logger.info("Отправлен анекдот по ключевому слову");
-            return new ProcessingResult(response, true, false);
-        } catch (Exception e) {
-            logger.error("Ошибка при получении анекдота по ключевому слову: {}", e.getMessage(), e);
-            return new ProcessingResult("❌ Извините, не удалось получить анекдот. Попробуйте позже.", true, false);
-        }
-    }
-
-    /**
-     * Получает подходящий шаблон для анекдота в зависимости от запроса
-     */
-    private String getJokeTemplate(String messageText) {
-        if (messageText.contains("joke")) {
-            return "😂 Here's a joke for you:";
-        } else if (messageText.contains("шутк")) {
-            return "😄 Вот забавная шутка:";
-        } else {
-            return "🎭 Держи анекдот:";
-        }
+        return null;
     }
 
     private ProcessingResult processCommand(String command, Long chatId, boolean isGroup) {
-        String cmd = command.toLowerCase().split("\\s+")[0];
+        // Убираем аргументы
+        String cmdPart = command.toLowerCase().split("\\s+")[0];
+        // Обрезаем суффикс вида @botusername
+        String cmd = cmdPart.contains("@") ? cmdPart.substring(0, cmdPart.indexOf("@")) : cmdPart;
+
         return switch (cmd) {
             case "/start" -> new ProcessingResult(responseTemplates.getMainMenuMessage(), true, false);
             case "/help" -> new ProcessingResult(responseTemplates.getHelpMessage(), true, false);
             case "/about" -> new ProcessingResult(responseTemplates.getAboutMessage(), true, false);
             case "/status" -> processStatusCommand();
             case "/models" -> new ProcessingResult(responseTemplates.getModelsMessage(), true, false);
-            case "/joke", "/анекдот" -> processJokeCommand(); // Команды для анекдотов
+
+            // НОВЫЕ КОМАНДЫ
+            case "/joke", "/анекдот" -> {
+                try {
+                    String joke = jokeService.getRandomJoke();
+                    yield new ProcessingResult(responseTemplates.getJokeIntroMessage() + joke, true, false);
+                } catch (Exception e) {
+                    yield new ProcessingResult(responseTemplates.getJokeErrorMessage(), true, false);
+                }
+            }
+            case "/weather", "/погода" -> {
+                try {
+                    String weather = weatherService.getWeather();
+                    yield new ProcessingResult(weather, true, false);
+                } catch (Exception e) {
+                    yield new ProcessingResult(responseTemplates.getWeatherErrorMessage(), true, false);
+                }
+            }
+            case "/horoscope", "/гороскоп" -> {
+                try {
+                    String horoscope = horoscopeService.getRandomHoroscope();
+                    yield new ProcessingResult(horoscope, true, false);
+                } catch (Exception e) {
+                    yield new ProcessingResult("❌ Гороскоп временно недоступен.", true, false);
+                }
+            }
+            case "/lucky", "/рулетка" -> {
+                try {
+                    RouletteService.RouletteResult result = rouletteService.spin();
+                    String response = rouletteService.formatResult(result);
+                    yield new ProcessingResult(response, true, false, true);
+                } catch (Exception e) {
+                    yield new ProcessingResult("❌ Рулетка временно не работает.", true, false);
+                }
+            }
+
             default -> {
                 if (isGroup) {
                     yield new ProcessingResult("", false);
@@ -247,32 +344,24 @@ public class MessageProcessor {
         };
     }
 
-    /**
-     * Обрабатывает команду получения анекдота
-     */
-    private ProcessingResult processJokeCommand() {
-        try {
-            String joke = jokeService.getRandomJoke();
-            String response = "🎭 **Анекдот дня:**\n\n" + joke + "\n\n😄 Надеюсь, поднял настроение!";
-            logger.info("Отправлен анекдот по команде");
-            return new ProcessingResult(response, true, false);
-        } catch (Exception e) {
-            logger.error("Ошибка при получении анекдота: {}", e.getMessage(), e);
-            return new ProcessingResult("❌ Извините, не удалось получить анекдот. Попробуйте позже.", true, false);
-        }
-    }
-
     private ProcessingResult processStatusCommand() {
         boolean isAvailable = googleAiService.isApiAvailable();
-        boolean jokeServiceAvailable = jokeService.isServiceAvailable();
         String status = isAvailable ? "✅ Онлайн" : "❌ Недоступен";
-        String jokeStatus = jokeServiceAvailable ? "✅ Онлайн" : "❌ Недоступен";
 
-        String message = String.format(
-                "🤖 **Статус бота:**\n\nAI API: %s\nСервис анекдотов: %s\nВремя работы: активен\nВерсия: 1.0.0",
-                status, jokeStatus
-        );
-        return new ProcessingResult(message, true, false);
+        // Добавляем статус новых сервисов
+        StringBuilder message = new StringBuilder();
+        message.append(String.format("🤖 **Статус бота:**\n\nAI API: %s\n", status));
+
+        // Статус дополнительных сервисов
+        message.append("\n**Дополнительные сервисы:**\n");
+        message.append("😄 Анекдоты: ✅ Активен\n");
+        message.append(weatherService.getServiceStatus()).append("\n");
+        message.append(horoscopeService.getServiceStatus()).append("\n");
+        message.append("🎰 Рулетка: ✅ Активна\n");
+
+        message.append("\nВремя работы: активен\nВерсия: 2.0.0");
+
+        return new ProcessingResult(message.toString(), true, false);
     }
 
     private ProcessingResult processUserMessage(String messageText, String userName) {
@@ -304,6 +393,7 @@ public class MessageProcessor {
     private ProcessingResult processCallbackQuery(CallbackQuery callbackQuery) {
         String data = callbackQuery.getData();
         logger.info("Получен callback: {}", data);
+
         return switch (data) {
             case "cmd_about" -> new ProcessingResult(responseTemplates.getAboutMessage(), true, false);
             case "cmd_help" -> new ProcessingResult(responseTemplates.getHelpMessage(), true, false);
@@ -311,19 +401,16 @@ public class MessageProcessor {
             case "cmd_models" -> new ProcessingResult(responseTemplates.getModelsMessage(), true, false);
             case "info_creator" -> new ProcessingResult(responseTemplates.getCreatorInfoMessage(), true, true);
             case "back_main" -> new ProcessingResult(responseTemplates.getBackToMainMessage(), true, false);
-            case "cmd_joke" -> processJokeCommand(); // Callback для анекдотов
             default -> new ProcessingResult("❓ Неизвестная команда", true, false);
         };
     }
 
     private boolean isMessageForBot(Message message) {
         String text = message.getText();
-        // Проверяем упоминание бота через @username
         if (text != null && text.contains("@")) {
             return true;
         }
 
-        // Проверяем, является ли это ответом на сообщение бота
         var reply = message.getReplyToMessage();
         return reply != null && reply.getFrom().getIsBot();
     }
@@ -343,19 +430,27 @@ public class MessageProcessor {
         private final String response;
         private final boolean shouldReply;
         private final boolean showCreatorKeyboard;
+        private final boolean needsRouletteAnimation; // НОВОЕ ПОЛЕ
 
         public ProcessingResult(String response, boolean shouldReply) {
-            this(response, shouldReply, false);
+            this(response, shouldReply, false, false);
         }
 
         public ProcessingResult(String response, boolean shouldReply, boolean showCreatorKeyboard) {
+            this(response, shouldReply, showCreatorKeyboard, false);
+        }
+
+        // НОВЫЙ КОНСТРУКТОР с поддержкой анимации рулетки
+        public ProcessingResult(String response, boolean shouldReply, boolean showCreatorKeyboard, boolean needsRouletteAnimation) {
             this.response = response;
             this.shouldReply = shouldReply;
             this.showCreatorKeyboard = showCreatorKeyboard;
+            this.needsRouletteAnimation = needsRouletteAnimation;
         }
 
         public String getResponse() { return response; }
         public boolean shouldReply() { return shouldReply; }
         public boolean shouldShowCreatorKeyboard() { return showCreatorKeyboard; }
+        public boolean needsRouletteAnimation() { return needsRouletteAnimation; } // НОВЫЙ ГЕТТЕР
     }
 }

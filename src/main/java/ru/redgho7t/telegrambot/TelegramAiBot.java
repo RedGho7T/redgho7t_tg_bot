@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.AnswerCallbackQuery;
+import org.telegram.telegrambots.meta.api.methods.send.SendDice;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
@@ -14,7 +15,6 @@ import ru.redgho7t.telegrambot.config.BotConfig;
 import ru.redgho7t.telegrambot.entity.MessageLog.MessageType;
 import ru.redgho7t.telegrambot.service.DatabaseService;
 import ru.redgho7t.telegrambot.service.GoogleAiService;
-import ru.redgho7t.telegrambot.service.JokeService;
 import ru.redgho7t.telegrambot.service.MessageProcessor;
 import ru.redgho7t.telegrambot.utils.KeyboardFactory;
 import ru.redgho7t.telegrambot.utils.MessageSplitter;
@@ -22,27 +22,21 @@ import ru.redgho7t.telegrambot.utils.MessageSplitter;
 import java.util.List;
 
 /**
- * Основной класс Telegram AI Bot с поддержкой базы данных и анекдотов
- *
- * Новые возможности:
- * - Автоматическое логирование всех сообщений в БД
- * - Сохранение времени ответа
- * - Логирование ошибок
- * - Статистика использования
- * - Функция анекдотов по ключевому слову
+ * Основной класс Telegram AI Bot с поддержкой базы данных
+ * ОБНОВЛЁН: Добавлена поддержка анимации рулетки через Dice API
  */
 @Component
 public class TelegramAiBot extends TelegramLongPollingBot {
-
     private static final Logger logger = LoggerFactory.getLogger(TelegramAiBot.class);
     private static final int MESSAGE_DELAY = 200; // Задержка между сообщениями в мс
+    private static final int ROULETTE_ANIMATION_DELAY = 4000; // Задержка для анимации рулетки
 
     private final BotConfig config;
     private final MessageProcessor messageProcessor;
     private final DatabaseService databaseService;
 
     @Autowired
-    public TelegramAiBot(BotConfig config, DatabaseService databaseService, JokeService jokeService) {
+    public TelegramAiBot(BotConfig config, DatabaseService databaseService) {
         this.config = config;
         this.databaseService = databaseService;
 
@@ -52,10 +46,14 @@ public class TelegramAiBot extends TelegramLongPollingBot {
         // Инициализируем сервис для Google Gemini API
         GoogleAiService googleAiService = new GoogleAiService(googleKey);
 
-        // Передаём сервисы в MessageProcessor
-        this.messageProcessor = new MessageProcessor(googleAiService, jokeService);
+        // Передаём сервис в MessageProcessor
+        this.messageProcessor = new MessageProcessor(googleAiService);
 
-        logger.info("🤖 TelegramAiBot инициализирован для @{} с поддержкой БД и анекдотов", config.getBotUsername());
+        logger.info("🤖 TelegramAiBot v2.0 инициализирован для @{} с поддержкой БД и новыми функциями",
+                config.getBotUsername());
+
+        // Логируем конфигурацию
+        config.logConfiguration();
     }
 
     @Override
@@ -159,16 +157,21 @@ public class TelegramAiBot extends TelegramLongPollingBot {
                 messageText.length() > 50 ? messageText.substring(0, 50) + "..." : messageText);
 
         var result = messageProcessor.processUpdate(update);
-
         if (result.shouldReply() && !result.getResponse().trim().isEmpty()) {
-            InlineKeyboardMarkup keyboard = null;
 
-            // Для команды /start показываем главное меню
-            if (messageText.equals("/start") || messageText.startsWith("/start@")) {
-                keyboard = KeyboardFactory.getMainMenuKeyboard();
+            // НОВАЯ ФУНКЦИЯ: Обработка анимации рулетки
+            if (result.needsRouletteAnimation()) {
+                handleRouletteWithAnimation(chatId, result.getResponse());
+            } else {
+                InlineKeyboardMarkup keyboard = null;
+
+                // Для команды /start показываем главное меню
+                if (messageText.equals("/start") || messageText.startsWith("/start@")) {
+                    keyboard = KeyboardFactory.getMainMenuKeyboard();
+                }
+
+                sendMessageWithKeyboard(chatId, result.getResponse(), keyboard);
             }
-
-            sendMessageWithKeyboard(chatId, result.getResponse(), keyboard);
 
             // Определяем тип сообщения для логирования
             MessageType messageType;
@@ -191,8 +194,40 @@ public class TelegramAiBot extends TelegramLongPollingBot {
     }
 
     /**
+     * НОВЫЙ МЕТОД: Обрабатывает рулетку с анимацией
+     */
+    private void handleRouletteWithAnimation(Long chatId, String finalMessage) {
+        try {
+            // 1. Отправляем сообщение о запуске рулетки
+            sendSimpleMessage(chatId, "🎰 **Запускаем рулетку удачи!**\n\nКрутим... 🎲");
+
+            // 2. Отправляем анимацию слот-машины
+            SendDice sendDice = new SendDice();
+            sendDice.setChatId(chatId.toString());
+            sendDice.setEmoji("🎰"); // Эмодзи слот-машины для анимации
+            execute(sendDice);
+
+            // 3. Ждём завершения анимации
+            Thread.sleep(ROULETTE_ANIMATION_DELAY);
+
+            // 4. Отправляем результат
+            sendSimpleMessage(chatId, finalMessage);
+
+            logger.info("🎰 Рулетка с анимацией выполнена для чата {}", chatId);
+
+        } catch (TelegramApiException e) {
+            logger.error("❌ Ошибка при отправке анимации рулетки: {}", e.getMessage());
+            // Fallback: отправляем результат без анимации
+            sendSimpleMessage(chatId, finalMessage);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            logger.warn("⚠️ Анимация рулетки была прервана");
+            sendSimpleMessage(chatId, finalMessage);
+        }
+    }
+
+    /**
      * Проверяет, содержит ли сообщение специальные ключевые слова
-     * Добавляем проверку на анекдоты
      */
     private boolean containsSpecialKeyword(String messageText) {
         String lowerText = messageText.toLowerCase();
@@ -200,8 +235,11 @@ public class TelegramAiBot extends TelegramLongPollingBot {
                 lowerText.contains("попи") || lowerText.contains("java") ||
                 lowerText.contains("жаби") || lowerText.contains("jabi") ||
                 lowerText.contains("го") || lowerText.contains("go") ||
+                // НОВЫЕ КЛЮЧЕВЫЕ СЛОВА
                 lowerText.contains("анекдот") || lowerText.contains("шутка") ||
-                lowerText.contains("joke");
+                lowerText.contains("погода") || lowerText.contains("прогноз") ||
+                lowerText.contains("гороскоп") || lowerText.contains("зодиак") ||
+                lowerText.contains("lucky") || lowerText.contains("рулетка");
     }
 
     /**
@@ -282,7 +320,6 @@ public class TelegramAiBot extends TelegramLongPollingBot {
 
         } catch (TelegramApiException e) {
             logger.error("❌ Ошибка при отправке сообщения в чат {}: {}", chatId, e.getMessage());
-
             // Если ошибка форматирования, пробуем без Markdown
             if (e.getMessage().contains("parse")) {
                 try {
@@ -317,7 +354,6 @@ public class TelegramAiBot extends TelegramLongPollingBot {
         } else if (update.hasCallbackQuery()) {
             return update.getCallbackQuery().getMessage().getChatId();
         }
-
         return null;
     }
 
@@ -352,7 +388,7 @@ public class TelegramAiBot extends TelegramLongPollingBot {
 
     @Override
     public void onRegister() {
-        logger.info("🚀 Бот @{} успешно зарегистрирован в Telegram", getBotUsername());
+        logger.info("🚀 Бот @{} v2.0 успешно зарегистрирован в Telegram", getBotUsername());
     }
 
     @Override

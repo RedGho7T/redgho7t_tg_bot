@@ -14,8 +14,13 @@ public class BotConfig {
     private String username;
     private String googleApiKey;
 
-    // Spring автоматически заполнит поля из application.properties
+    // НОВЫЕ ПОЛЯ для дополнительных API
+    private String weatherApiKey;
+    private String weatherApiUrl = "https://api.openweathermap.org/data/2.5";
+    private String jokeApiUrl = "https://www.anekdot.ru/rss/export_j.xml";
+    private String horoscopeApiUrl = "";
 
+    // Spring автоматически заполнит поля из application.properties
     public String getBotToken() { return token; }
     public void setToken(String token) { this.token = token; }
 
@@ -25,9 +30,43 @@ public class BotConfig {
     public String getGoogleApiKey() { return googleApiKey; }
     public void setGoogleApiKey(String googleApiKey) { this.googleApiKey = googleApiKey; }
 
+    // НОВЫЕ ГЕТТЕРЫ И СЕТТЕРЫ
+    public String getWeatherApiKey() { return weatherApiKey; }
+    public void setWeatherApiKey(String weatherApiKey) { this.weatherApiKey = weatherApiKey; }
+
+    public String getWeatherApiUrl() { return weatherApiUrl; }
+    public void setWeatherApiUrl(String weatherApiUrl) { this.weatherApiUrl = weatherApiUrl; }
+
+    public String getJokeApiUrl() { return jokeApiUrl; }
+    public void setJokeApiUrl(String jokeApiUrl) { this.jokeApiUrl = jokeApiUrl; }
+
+    public String getHoroscopeApiUrl() { return horoscopeApiUrl; }
+    public void setHoroscopeApiUrl(String horoscopeApiUrl) { this.horoscopeApiUrl = horoscopeApiUrl; }
+
     public boolean isValid() {
-        return token != null && !token.isBlank()
+        boolean basicValid = token != null && !token.isBlank()
                 && username != null && !username.isBlank()
                 && googleApiKey != null && !googleApiKey.isBlank();
+
+        if (!basicValid) {
+            logger.error("Основная конфигурация бота некорректна");
+            return false;
+        }
+
+        // Проверяем дополнительные API (не критичны для работы)
+        if (weatherApiKey == null || weatherApiKey.isBlank()) {
+            logger.warn("Weather API ключ не настроен - функция погоды будет недоступна");
+        }
+
+        return true;
+    }
+
+    public void logConfiguration() {
+        logger.info("=== КОНФИГУРАЦИЯ БОТА ===");
+        logger.info("Bot Username: @{}", username);
+        logger.info("Google AI API: {}", googleApiKey != null && !googleApiKey.isBlank() ? "✅ Настроен" : "❌ Не настроен");
+        logger.info("Weather API: {}", weatherApiKey != null && !weatherApiKey.isBlank() ? "✅ Настроен" : "❌ Не настроен");
+        logger.info("Jokes API URL: {}", jokeApiUrl);
+        logger.info("========================");
     }
 }

@@ -1,274 +1,286 @@
 package ru.redgho7t.telegrambot.service;
 
+import okhttp3.*;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 /**
- * Сервис для получения случайных русских анекдотов с реальными API
+ * Сервис для получения анекдотов с русскоязычных API
+ * Особое внимание уделено корректной обработке кодировки
  */
 @Service
 public class JokeService {
-
     private static final Logger logger = LoggerFactory.getLogger(JokeService.class);
-    private final Random random = new Random();
 
-    // Локальная база русских анекдотов (fallback)
-    private final List<String> localJokes = Arrays.asList(
-            "— Доктор, меня постоянно мучают кошмары про футбол!\n— Принимайте эти таблетки перед сном.\n— А это поможет?\n— Не знаю, но Аршавин принимал.",
+    private static final String RSS_URL = "https://www.anekdot.ru/rss/export_j.xml";
+    private static final String BACKUP_RSS_URL = "https://www.anekdot.ru/rss/random_j.xml";
 
-            "Встречаются два программиста:\n— Привет! Как дела? Как жена?\n— Спасибо, откатился на предыдущую версию.",
+    private final OkHttpClient httpClient;
+    private final List<String> jokesCache;
+    private long lastUpdateTime = 0;
+    private static final long CACHE_DURATION = 6 * 60 * 60 * 1000; // 6 часов
 
-            "Объявление: \"Продам гараж в связи с покупкой квартиры. Гараж находится в спальном районе.\"",
-
-            "— Почему у тебя жена такая нервная?\n— Да я сам не понимаю. Вчера прихожу домой в 4 утра, а она мне устраивает сцену, что я якобы пропал на три дня.",
-
-            "Хорошо быть пессимистом. Либо ты прав, либо приятно удивлен.",
-
-            "— Алло, это служба знакомств?\n— Да.\n— А правда, что у вас есть девушка, которая ищет мужчину с квартирой и машиной?\n— Да, правда.\n— А можете дать её телефон?\n— А у вас есть квартира и машина?\n— Нет.\n— Тогда зачем вам её телефон?\n— Хочу с ней подружиться. У нас много общего.",
-
-            "Встретились два бизнесмена:\n— Как дела?\n— Да в последнее время хуже не придумаешь. Вчера жена выиграла в лотерею миллион долларов...\n— Ты что, с ума сошёл? Это же здорово!\n— Да, но она ещё не знает, что мы развелись два дня назад!",
-
-            "Идёт мужик по пустыне, видит — лежит лампа. Потёр, вылезает джинн:\n— Исполню три твоих желания!\n— Хочу быть самым богатым!\n— Готово!\n— Хочу быть самым умным!\n— Готово!\n— Хочу быть самым красивым!\n— Готово!\nПревращается мужик в женщину.",
-
-            "— Дорогой, а помнишь, ты обещал жениться на самой красивой девушке в мире?\n— Помню.\n— А почему женился на мне?\n— А ты видела хоть одну девушку красивее тебя, которая согласилась бы за меня выйти?",
-
-            "Приходит мужик к врачу:\n— Доктор, у меня проблемы с памятью.\n— Когда это началось?\n— Что началось?",
-
-            "Звонок в службу такси:\n— Алло, можно машину?\n— Куда?\n— На дачу.\n— А где дача?\n— В деревне.\n— А где деревня?\n— А вы что, географии не знаете?\n— Знаю.\n— Ну вот и езжайте!",
-
-            "Разговор двух подруг:\n— Представляешь, мой муж похудел на 10 кг!\n— Как?\n— Я его выгнала.",
-
-            "Учитель спрашивает Вовочку:\n— Если у твоего папы есть 10 яблок, и он даст тебе 3, сколько яблок у тебя будет?\n— Не знаю.\n— Как не знаешь? 10 минус 3!\n— А вы моего папу не знаете!",
-
-            "— Милый, купи мне что-нибудь с бриллиантами!\n— Вот тебе колода карт.",
-
-            "Пациент жалуется врачу:\n— Доктор, у меня очень плохая память!\n— И когда вы это заметили?\n— Что заметил?",
-
-            "— Дорогая, я принёс хорошие и плохие новости.\n— Начни с хороших.\n— Airbag в машине работает отлично!",
-
-            "Сидит программист, кодит. Жена кричит:\n— Дорогой, вынеси мусор!\n— Минуточку, допишу функцию.\nЧерез час:\n— Дорогой, ты мусор вынес?\n— Да, в функцию вынес.",
-
-            "— Почему программисты путают Рождество и Хеллоуин?\n— Потому что 31 Oct = 25 Dec!",
-
-            "Жена говорит мужу:\n— Дорогой, наш сын такой же, как ты!\n— Умный?\n— Нет, в шахматы играть не умеет, но всё равно переворачивает доску.",
-
-            "— Доктор, у меня странная болезнь — я постоянно вижу спрайты и иконки!\n— Это пиксельная лихорадка. Попейте чаю в низком разрешении."
+    // Fallback анекдоты на случай недоступности API
+    private static final List<String> FALLBACK_JOKES = Arrays.asList(
+            "— Доктор, я забываю всё!\n— Когда это началось?\n— Что началось?",
+            "Программист идёт в магазин. Жена говорит:\n— Купи хлеб, а если будут яйца — возьми десяток.\nПрограммист возвращается с десятью буханками хлеба:\n— Яйца были!",
+            "— Чем Java отличается от JavaScript?\n— Тем же, чем Car от Carpet.",
+            "— Почему программисты путают Хэллоуин и Рождество?\n— Потому что Oct 31 = Dec 25",
+            "Встречаются два программиста:\n— Как дела?\n— Как в игре: то ли баг, то ли фича."
     );
 
+    public JokeService() {
+        this.httpClient = new OkHttpClient.Builder()
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .writeTimeout(15, TimeUnit.SECONDS)
+                .retryOnConnectionFailure(true)
+                .build();
+        this.jokesCache = new ArrayList<>();
+        logger.info("JokeService инициализирован");
+    }
+
     /**
-     * Получает случайный анекдот из всех доступных источников
-     * @return текст анекдота
+     * Получает случайный анекдот
      */
     public String getRandomJoke() {
-        // Сначала пытаемся получить из внешних API
-        try {
-            String externalJoke = getExternalJoke();
-            if (externalJoke != null && !externalJoke.trim().isEmpty() && externalJoke.length() > 10) {
-                logger.info("Получен анекдот из внешнего API");
-                return externalJoke;
-            }
-        } catch (Exception e) {
-            logger.warn("Ошибка при получении анекдота из внешнего источника: {}", e.getMessage());
+        // Проверяем кэш и обновляем при необходимости
+        refreshCacheIfNeeded();
+
+        // Если кэш пуст, используем fallback
+        if (jokesCache.isEmpty()) {
+            logger.warn("Кэш анекдотов пуст, используем fallback");
+            return getRandomFallbackJoke();
         }
 
-        // Fallback на локальную базу
-        String localJoke = getLocalJoke();
-        logger.debug("Использована локальная база анекдотов");
-        return localJoke;
+        // Возвращаем случайный анекдот из кэша
+        Random random = new Random();
+        String joke = jokesCache.get(random.nextInt(jokesCache.size()));
+
+        logger.debug("Возвращен анекдот длиной {} символов", joke.length());
+        return joke;
     }
 
     /**
-     * Получает анекдот из локальной базы
-     * @return случайный анекдот из локальной коллекции
+     * Принудительно обновляет кэш анекдотов
      */
-    private String getLocalJoke() {
-        return localJokes.get(random.nextInt(localJokes.size()));
+    public void refreshJokeCache() {
+        logger.info("Принудительное обновление кэша анекдотов");
+        loadJokesFromAPI();
     }
 
     /**
-     * Пытается получить анекдот из внешних источников
-     * @return текст анекдота или null в случае ошибки
+     * Проверяет и обновляет кэш при необходимости
      */
-    private String getExternalJoke() {
-        // Список русскоязычных API (в порядке приоритета)
-        String[] apiUrls = {
-                "http://rzhunemogu.ru/RandJSON.aspx?CType=1"  // RzhuneMogu.ru API
-        };
-
-        for (String apiUrl : apiUrls) {
-            try {
-                String joke = fetchJokeFromApi(apiUrl);
-                if (joke != null && !joke.trim().isEmpty()) {
-                    logger.debug("Получен анекдот из внешнего API: {}", apiUrl);
-                    return joke;
-                }
-            } catch (Exception e) {
-                logger.debug("Ошибка при обращении к API {}: {}", apiUrl, e.getMessage());
-            }
+    private void refreshCacheIfNeeded() {
+        long currentTime = System.currentTimeMillis();
+        if (jokesCache.isEmpty() || (currentTime - lastUpdateTime) > CACHE_DURATION) {
+            logger.info("Требуется обновление кэша анекдотов");
+            loadJokesFromAPI();
         }
-
-        return null;
     }
 
     /**
-     * Выполняет HTTP-запрос к API для получения анекдота
-     * @param apiUrl URL API
-     * @return текст анекдота или null
+     * Загружает анекдоты из API
      */
-    private String fetchJokeFromApi(String apiUrl) {
+    private void loadJokesFromAPI() {
         try {
-            URL url = new URL(apiUrl);
-            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("GET");
-            connection.setRequestProperty("Accept", "application/json");
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0 (TelegramBot/1.0)");
-            connection.setConnectTimeout(3000); // 3 секунды
-            connection.setReadTimeout(3000);
+            List<String> newJokes = fetchJokesFromRSS(RSS_URL);
 
-            int responseCode = connection.getResponseCode();
-            if (responseCode == HttpURLConnection.HTTP_OK) {
-                // Читаем с правильной кодировкой для русского текста
-                try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
+            // Если основной источник не дал результатов, пробуем резервный
+            if (newJokes.isEmpty()) {
+                logger.warn("Основной RSS не дал результатов, пробуем резервный");
+                newJokes = fetchJokesFromRSS(BACKUP_RSS_URL);
+            }
 
-                    StringBuilder response = new StringBuilder();
-                    String line;
-                    while ((line = reader.readLine()) != null) {
-                        response.append(line);
-                    }
-
-                    return parseJokeResponse(response.toString(), apiUrl);
+            if (!newJokes.isEmpty()) {
+                synchronized (jokesCache) {
+                    jokesCache.clear();
+                    jokesCache.addAll(newJokes);
+                    lastUpdateTime = System.currentTimeMillis();
                 }
+                logger.info("Загружено {} анекдотов в кэш", newJokes.size());
             } else {
-                logger.warn("HTTP {} от API: {}", responseCode, apiUrl);
+                logger.error("Не удалось загрузить анекдоты ни из одного источника");
             }
-        } catch (Exception e) {
-            logger.warn("Ошибка при запросе к API {}: {}", apiUrl, e.getMessage());
-        }
 
-        return null;
+        } catch (Exception e) {
+            logger.error("Ошибка при загрузке анекдотов: {}", e.getMessage(), e);
+        }
     }
 
     /**
-     * Парсит ответ от API в зависимости от его формата
-     * @param response ответ от API
-     * @param apiUrl URL источника
-     * @return распарсенный текст анекдота
+     * Получает анекдоты из RSS с правильной обработкой кодировки
      */
-    private String parseJokeResponse(String response, String apiUrl) {
+    private List<String> fetchJokesFromRSS(String url) throws IOException {
+        Request request = new Request.Builder()
+                .url(url)
+                .addHeader("Accept-Charset", "UTF-8")
+                .addHeader("User-Agent", "Mozilla/5.0 (compatible; TelegramBot/1.0)")
+                .addHeader("Accept", "application/rss+xml, application/xml, text/xml")
+                .build();
+
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw new IOException("HTTP " + response.code() + ": " + response.message());
+            }
+
+            if (response.body() == null) {
+                throw new IOException("Пустой ответ от сервера");
+            }
+
+            // Получаем данные как байты для правильной обработки кодировки
+            byte[] bytes = response.body().bytes();
+            String xmlContent = new String(bytes, StandardCharsets.UTF_8);
+
+            // Если кодировка некорректная, пробуем Windows-1251
+            if (containsEncodingIssues(xmlContent)) {
+                xmlContent = new String(bytes, "Windows-1251");
+                logger.debug("Использована кодировка Windows-1251");
+            }
+
+            return parseJokesFromXML(xmlContent);
+        }
+    }
+
+    /**
+     * Парсит анекдоты из XML контента
+     */
+    private List<String> parseJokesFromXML(String xmlContent) {
+        List<String> jokes = new ArrayList<>();
+
         try {
-            if (apiUrl.contains("rzhunemogu.ru")) {
-                // Парсим RzhuneMogu: {"content":"текст анекдота"}
-                String content = extractJsonValue(response, "content");
-                if (content != null && content.length() > 10) {
-                    // Очищаем HTML теги и лишние символы
-                    return cleanJokeText(content);
+            // Очищаем XML от недопустимых символов
+            xmlContent = cleanXmlContent(xmlContent);
+
+            // Парсим XML с помощью JSoup
+            Document doc = Jsoup.parse(xmlContent, "", org.jsoup.parser.Parser.xmlParser());
+            Elements items = doc.select("item");
+
+            for (Element item : items) {
+                Element description = item.selectFirst("description");
+                if (description != null) {
+                    String joke = description.text();
+                    joke = cleanJokeText(joke);
+
+                    if (isValidJoke(joke)) {
+                        jokes.add(joke);
+                    }
                 }
             }
+
+            logger.debug("Распарсено {} анекдотов из XML", jokes.size());
+
         } catch (Exception e) {
-            logger.warn("Ошибка парсинга ответа от {}: {}", apiUrl, e.getMessage());
+            logger.error("Ошибка при парсинге XML: {}", e.getMessage(), e);
         }
 
-        return null;
+        return jokes;
     }
 
     /**
-     * Очищает текст анекдота от HTML тегов и нормализует
-     * @param text исходный текст
-     * @return очищенный текст
+     * Очищает XML от недопустимых символов
      */
-    private String cleanJokeText(String text) {
-        if (text == null) return null;
+    private String cleanXmlContent(String xmlContent) {
+        // Удаляем недопустимые XML символы
+        xmlContent = xmlContent.replaceAll("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F]", "");
 
-        return text
-                .replaceAll("<[^>]*>", "") // Удаляем HTML теги
-                .replaceAll("&quot;", "\"") // Декодируем кавычки
-                .replaceAll("&amp;", "&")   // Декодируем амперсанд
-                .replaceAll("&lt;", "<")    // Декодируем <
-                .replaceAll("&gt;", ">")    // Декодируем >
-                .replaceAll("\\\\n", "\n")  // Нормализуем переводы строк
-                .replaceAll("\\\\r", "")    // Удаляем \\r
-                .replaceAll("\\\\t", " ")   // Заменяем табы на пробелы
-                .replaceAll("\\s+", " ")    // Убираем лишние пробелы
-                .trim();
+        // Заменяем HTML entities
+        xmlContent = xmlContent.replace("&nbsp;", " ");
+        xmlContent = xmlContent.replace("&amp;", "&");
+        xmlContent = xmlContent.replace("&lt;", "<");
+        xmlContent = xmlContent.replace("&gt;", ">");
+        xmlContent = xmlContent.replace("&quot;", "\"");
+
+        return xmlContent;
     }
 
     /**
-     * Простой парсер для извлечения значений из JSON
-     * @param json JSON строка
-     * @param key ключ для поиска
-     * @return значение или null
+     * Очищает текст анекдота от HTML тегов и лишних символов
      */
-    private String extractJsonValue(String json, String key) {
-        try {
-            String searchPattern = "\"" + key + "\":\"";
-            int startIndex = json.indexOf(searchPattern);
-            if (startIndex == -1) {
-                return null;
-            }
+    private String cleanJokeText(String joke) {
+        // Удаляем HTML теги
+        joke = Jsoup.parse(joke).text();
 
-            startIndex += searchPattern.length();
-            int endIndex = json.indexOf("\"", startIndex);
+        // Заменяем multiple пробелы на один
+        joke = joke.replaceAll("\\s+", " ");
 
-            // Обрабатываем escaped кавычки
-            while (endIndex > 0 && json.charAt(endIndex - 1) == '\\') {
-                endIndex = json.indexOf("\"", endIndex + 1);
-            }
+        // Убираем лишние переносы строк
+        joke = joke.replaceAll("\\n\\s*\\n", "\n");
 
-            if (endIndex == -1) {
-                return null;
-            }
+        // Обрезаем пробелы по краям
+        joke = joke.trim();
 
-            return json.substring(startIndex, endIndex);
-        } catch (Exception e) {
-            logger.warn("Ошибка парсинга JSON: {}", e.getMessage());
-            return null;
-        }
+        return joke;
     }
 
     /**
-     * Проверяет доступность сервиса анекдотов
-     * @return true если сервис работает
+     * Проверяет, является ли текст валидным анекдотом
      */
-    public boolean isServiceAvailable() {
-        return true; // Локальная база всегда доступна
-    }
-
-    /**
-     * Получает статистику анекдотов
-     * @return информация о доступных анекдотах
-     */
-    public String getJokeStats() {
-        int localCount = localJokes.size();
-        boolean apiAvailable = testExternalApi();
-
-        if (apiAvailable) {
-            return String.format("📊 Доступно %d локальных анекдотов + тысячи из внешних API", localCount);
-        } else {
-            return String.format("📊 Доступно %d русских анекдотов в локальной базе", localCount);
-        }
-    }
-
-    /**
-     * Тестирует доступность внешних API
-     * @return true если хотя бы один API доступен
-     */
-    private boolean testExternalApi() {
-        try {
-            String testJoke = getExternalJoke();
-            return testJoke != null && !testJoke.trim().isEmpty();
-        } catch (Exception e) {
+    private boolean isValidJoke(String joke) {
+        if (joke == null || joke.trim().isEmpty()) {
             return false;
         }
+
+        // Проверяем минимальную длину
+        if (joke.length() < 10) {
+            return false;
+        }
+
+        // Проверяем максимальную длину (Telegram ограничение)
+        if (joke.length() > 4000) {
+            return false;
+        }
+
+        // Проверяем, что это не системное сообщение
+        String lowerJoke = joke.toLowerCase();
+        if (lowerJoke.contains("error") ||
+                lowerJoke.contains("ошибка") ||
+                lowerJoke.contains("404") ||
+                lowerJoke.contains("не найден")) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Проверяет, есть ли проблемы с кодировкой
+     */
+    private boolean containsEncodingIssues(String text) {
+        // Ищем характерные признаки неправильной кодировки
+        return text.contains("Ð") ||
+                text.contains("Ñ") ||
+                text.contains("ÐŸ") ||
+                text.contains("â€") ||
+                text.contains("Â");
+    }
+
+    /**
+     * Возвращает случайный fallback анекдот
+     */
+    private String getRandomFallbackJoke() {
+        Random random = new Random();
+        return FALLBACK_JOKES.get(random.nextInt(FALLBACK_JOKES.size()));
+    }
+
+    /**
+     * Возвращает статистику кэша
+     */
+    public String getCacheStats() {
+        return String.format("Кэш анекдотов: %d элементов, последнее обновление: %s",
+                jokesCache.size(),
+                lastUpdateTime > 0 ? new Date(lastUpdateTime).toString() : "никогда");
     }
 }
